@@ -1,0 +1,73 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Variables de diseño ──────────────────────────────────────────── */
+@layer base {
+  :root {
+    --background:     220 47% 4%;
+    --foreground:     213 31% 91%;
+    --card:           220 39% 7%;
+    --card-foreground: 213 31% 91%;
+    --border:         220 30% 14%;
+    --input:          220 30% 14%;
+    --primary:        217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --muted:          220 25% 12%;
+    --muted-foreground: 215 16% 57%;
+    --accent:         220 25% 12%;
+    --accent-foreground: 213 31% 91%;
+    --destructive:    0 63% 60%;
+    --ring:           217 91% 60%;
+    --radius:         0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-navy-950 text-foreground font-sans antialiased;
+    background-image:
+      linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Scrollbar personalizado */
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #020818; }
+  ::-webkit-scrollbar-thumb { background: #112b7a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+}
+
+/* ── Utilidades: líneas estilo sable láser ────────────────────────── */
+@layer utilities {
+  .laser-line-h {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #3b82f6, #60a5fa, #3b82f6, transparent);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+  }
+
+  .laser-line-v {
+    width: 1px;
+    background: linear-gradient(180deg, transparent, #3b82f6, #60a5fa, #3b82f6, transparent);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+  }
+
+  .glow-text {
+    text-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+  }
+
+  .card-dark {
+    @apply bg-navy-900 border border-navy-700 rounded-xl;
+  }
+
+  .glass-card {
+    background: rgba(10, 26, 74, 0.6);
+    backdrop-filter: blur(12px);
+    @apply border border-navy-700 rounded-xl;
+  }
+}
