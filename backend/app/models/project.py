@@ -12,7 +12,7 @@ class Project(SQLModel, table=True):
 
     status: str = Field(default="nuevo", nullable=False, max_length=50)
 
-    owner_email: str = Field(index=True, nullable=False, max_length=320)
+    owner_id: int = Field(index=True, nullable=False, foreign_key="user.id")
 
     source: str = Field(default="manual", nullable=False, max_length=50)  # manual | list
     ms_list_id: str | None = Field(default=None, index=True, max_length=100)

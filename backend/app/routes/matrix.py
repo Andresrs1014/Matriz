@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, select
 
 from app.core.dependencies import get_db, get_current_user
 from app.core.ws_manager import ws_manager
 from app.models.user import User
+from app.models.project import Project
+from app.models.matrix import MatrixEvaluation
 from app.schemas.matrix import (
     QuestionRead,
     EvaluationSubmit,
@@ -21,8 +23,11 @@ router = APIRouter(prefix="/matrix", tags=["Matrix"])
 
 
 @router.get("/questions", response_model=list[QuestionRead])
-def list_questions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Retorna las 10 preguntas activas ordenadas por eje y posición."""
+def list_questions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna las preguntas activas ordenadas por eje y posición."""
     return get_active_questions(db)
 
 
@@ -41,19 +46,17 @@ async def evaluate_project(
     evaluation = create_evaluation(
         db=db,
         project_id=project_id,
-        owner_email=current_user.email,
-        evaluator_user_id=current_user.id,
+        owner_id=current_user.id,
         payload=payload,
     )
 
-    # Broadcast en tiempo real al frontend
     await ws_manager.broadcast(
         event_type="evaluation_created",
         payload={
-            "project_id": project_id,
-            "impact_score": evaluation.impact_score,
-            "effort_score": evaluation.effort_score,
-            "quadrant": evaluation.quadrant,
+            "project_id":    project_id,
+            "impact_score":  evaluation.impact_score,
+            "effort_score":  evaluation.effort_score,
+            "quadrant":      evaluation.quadrant,
             "evaluation_id": evaluation.id,
         },
     )
@@ -61,7 +64,7 @@ async def evaluate_project(
     return EvaluationRead(
         id=evaluation.id,
         project_id=evaluation.project_id,
-        evaluator_user_id=evaluation.evaluator_user_id,
+        category_id=evaluation.category_id,
         impact_score=evaluation.impact_score,
         effort_score=evaluation.effort_score,
         quadrant=evaluation.quadrant,
@@ -71,12 +74,17 @@ async def evaluate_project(
 
 
 @router.get("/plot", response_model=list[MatrixPlotPoint])
-def get_matrix_plot(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_matrix_plot(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Retorna los puntos para renderizar la matriz cuadrante.
     Un punto por proyecto (evaluación más reciente).
+    Admin ve todos, user ve solo los suyos.
     """
-    return get_latest_evaluation_per_project(db, owner_email=current_user.email)
+    owner_id = None if current_user.role in ("admin", "superadmin") else current_user.id
+    return get_latest_evaluation_per_project(db, owner_id=owner_id)
 
 
 @router.get("/history/{project_id}", response_model=list[EvaluationRead])
@@ -86,12 +94,23 @@ def get_project_history(
     current_user: User = Depends(get_current_user),
 ):
     """Historial completo de re-evaluaciones de un proyecto (más reciente primero)."""
-    evaluations = get_evaluations_for_project(db, project_id=project_id, owner_email=current_user.email)
+    # Verificar acceso
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    if current_user.role not in ("admin", "superadmin") and project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
+
+    evaluations = get_evaluations_for_project(
+        db,
+        project_id=project_id,
+        owner_id=current_user.id,
+    )
     return [
         EvaluationRead(
             id=e.id,
             project_id=e.project_id,
-            evaluator_user_id=e.evaluator_user_id,
+            category_id=e.category_id,
             impact_score=e.impact_score,
             effort_score=e.effort_score,
             quadrant=e.quadrant,

@@ -1,50 +1,95 @@
-from fastapi import APIRouter, Depends
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlmodel import Session, select
 
 from app.core.dependencies import get_db, get_current_user
+from app.models.project import Project
 from app.models.user import User
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
-from app.services.project_service import (
-    list_projects,
-    get_project,
-    create_project,
-    update_project,
-    delete_project,
-)
+from app.schemas.project import ProjectCreate, ProjectRead
+from app.core.ws_manager import ws_manager
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
+def _to_read(p: Project) -> ProjectRead:
+    return ProjectRead(
+        id=p.id,
+        title=p.title,
+        description=p.description,
+        status=p.status,
+        source=p.source,
+        owner_id=p.owner_id,
+        ms_list_id=p.ms_list_id,        # ← agregado
+        updated_at=p.updated_at,        # ← agregado
+        created_at=p.created_at.isoformat(),
+    )
+
+
 @router.get("", response_model=list[ProjectRead])
-def get_my_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return list_projects(db, owner_email=current_user.email)
-
-
-@router.post("", response_model=ProjectRead)
-def create_my_project(payload: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    data = payload.model_dump(exclude_unset=True)
-    return create_project(db, owner_email=current_user.email, data=data)
-
-
-@router.get("/{project_id}", response_model=ProjectRead)
-def get_my_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return get_project(db, project_id=project_id, owner_email=current_user.email)
-
-
-@router.put("/{project_id}", response_model=ProjectRead)
-def update_my_project(
-    project_id: int,
-    payload: ProjectUpdate,
+def list_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project(db, project_id=project_id, owner_email=current_user.email)
-    data = payload.model_dump(exclude_unset=True)
-    return update_project(db, project, data)
+    if current_user.role in ("admin", "superadmin"):
+        projects = db.exec(select(Project).order_by(Project.created_at.desc())).all()
+    else:
+        projects = db.exec(
+            select(Project)
+            .where(Project.owner_id == current_user.id)
+            .order_by(Project.created_at.desc())
+        ).all()
+    return [_to_read(p) for p in projects]
+
+
+@router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
+async def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = Project(
+        title=payload.title,
+        description=payload.description,
+        owner_id=current_user.id,
+        source="manual",
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+
+    # ✅ async def permite await directo — sin asyncio.create_task
+    await ws_manager.broadcast(
+        event_type="project.created",
+        payload={"id": project.id, "title": project.title},
+    )
+
+    return _to_read(project)
+
+
+@router.get("/{project_id}", response_model=ProjectRead)
+def get_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    if current_user.role not in ("admin", "superadmin") and project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
+    return _to_read(project)
 
 
 @router.delete("/{project_id}")
-def delete_my_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project = get_project(db, project_id=project_id, owner_email=current_user.email)
-    delete_project(db, project)
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    if current_user.role not in ("admin", "superadmin") and project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
+    db.delete(project)
+    db.commit()
     return {"ok": True}

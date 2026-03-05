@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Search, FolderKanban, Trash2, ClipboardList, Calendar } from "lucide-react"
 import { useProjects } from "@/hooks/useProjects"
@@ -15,6 +16,7 @@ const STATUS_CONFIG = {
 
 export default function ProjectsPage() {
   const { projects, loading, createProject, deleteProject } = useProjects()
+  const navigate = useNavigate()
 
   const [search,      setSearch]      = useState("")
   const [showCreate,  setShowCreate]  = useState(false)
@@ -145,7 +147,12 @@ export default function ProjectsPage() {
               >
                 {/* Título + badge estado */}
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-white font-medium text-sm leading-snug flex-1">{project.title}</h3>
+                  <h3
+                    onClick={() => navigate(`/projects/${project.id}`)}
+                    className="text-white font-medium text-sm leading-snug flex-1 cursor-pointer hover:text-electric transition-colors"
+                  >
+                    {project.title}
+                  </h3>
                   <span className={cn(
                     "text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0",
                     STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG]?.class ?? STATUS_CONFIG.nuevo.class

@@ -21,7 +21,7 @@ class EvaluationSubmit(BaseModel):
 
 class QuestionRead(BaseModel):
     id: int
-    key: str
+    category_id: int | None
     axis: str
     text: str
     weight: float
@@ -31,7 +31,7 @@ class QuestionRead(BaseModel):
 class EvaluationRead(BaseModel):
     id: int
     project_id: int
-    evaluator_user_id: int | None
+    category_id: int | None
     impact_score: float
     effort_score: float
     quadrant: str

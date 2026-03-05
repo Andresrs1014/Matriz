@@ -1,10 +1,11 @@
 import { Bell, Wifi, WifiOff } from "lucide-react"
 import { useProjectStore } from "@/store/projectStore"
 import { useAuthStore } from "@/store/authStore"
+import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
 import { cn } from "@/lib/utils"
 
 interface TopBarProps {
-  title:    string
+  title:     string
   subtitle?: string
 }
 
@@ -15,11 +16,20 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
   return (
     <header className="h-16 bg-navy-900/80 backdrop-blur border-b border-navy-700 flex items-center px-6 gap-4 sticky top-0 z-30">
 
-      {/* Título de página */}
       <div className="flex-1">
         <h1 className="text-base font-semibold text-white leading-tight">{title}</h1>
         {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
       </div>
+
+      {/* Badge de rol */}
+      {user && (
+        <span className={cn(
+          "hidden sm:inline-flex text-[10px] font-semibold px-2.5 py-1 rounded-full border",
+          ROLE_COLORS[user.role]
+        )}>
+          {ROLE_LABELS[user.role]}
+        </span>
+      )}
 
       {/* Estado WebSocket */}
       <div className={cn(

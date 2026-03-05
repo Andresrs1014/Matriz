@@ -106,13 +106,12 @@ def get_active_questions(db: Session) -> list[MatrixQuestion]:
 def create_evaluation(
     db: Session,
     project_id: int,
-    owner_email: str,
-    evaluator_user_id: int,
+    owner_id: int,
     payload: EvaluationSubmit,
 ) -> MatrixEvaluation:
     # Verificar que el proyecto existe y pertenece al usuario
     project = db.get(Project, project_id)
-    if not project or project.owner_email != owner_email:
+    if not project or project.owner_id != owner_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
 
     responses_raw = [{"question_id": r.question_id, "value": r.value} for r in payload.responses]
@@ -121,7 +120,6 @@ def create_evaluation(
 
     evaluation = MatrixEvaluation(
         project_id=project_id,
-        evaluator_user_id=evaluator_user_id,
         impact_score=impact_score,
         effort_score=effort_score,
         quadrant=quadrant,
@@ -142,9 +140,9 @@ def create_evaluation(
     return evaluation
 
 
-def get_evaluations_for_project(db: Session, project_id: int, owner_email: str) -> list[MatrixEvaluation]:
+def get_evaluations_for_project(db: Session, project_id: int, owner_id: int) -> list[MatrixEvaluation]:
     project = db.get(Project, project_id)
-    if not project or project.owner_email != owner_email:
+    if not project or project.owner_id != owner_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
     return list(
         db.exec(
@@ -155,13 +153,13 @@ def get_evaluations_for_project(db: Session, project_id: int, owner_email: str) 
     )
 
 
-def get_latest_evaluation_per_project(db: Session, owner_email: str) -> list[MatrixPlotPoint]:
+def get_latest_evaluation_per_project(db: Session, owner_id: int) -> list[MatrixPlotPoint]:
     """
     Para cada proyecto del usuario, trae SOLO la evaluación más reciente.
     Esto alimenta el gráfico de la matriz cuadrante en el frontend.
     """
     projects = list(
-        db.exec(select(Project).where(Project.owner_email == owner_email))
+        db.exec(select(Project).where(Project.owner_id == owner_id))
     )
 
     plot_points: list[MatrixPlotPoint] = []

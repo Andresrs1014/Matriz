@@ -18,7 +18,7 @@ class ListsWebhookPayload(BaseModel):
     title: str
     description: str | None = None
     status: str | None = "nuevo"
-    owner_email: str
+    owner_id: str
     ms_list_id: str | None = None
 
 

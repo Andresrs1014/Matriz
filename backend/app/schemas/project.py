@@ -21,7 +21,7 @@ class ProjectRead(BaseModel):
     title: str
     description: str | None
     status: str
-    owner_email: str
+    owner_id: int
     source: str
     ms_list_id: str | None
     created_at: datetime

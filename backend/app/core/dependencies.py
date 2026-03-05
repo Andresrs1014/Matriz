@@ -22,14 +22,46 @@ def get_current_user(
         payload = decode_token(token)
         subject = payload.get("sub")
         if not subject:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido (sin subject).")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido (sin subject)."
+            )
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido o expirado.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado."
+        )
 
     statement = select(User).where(User.email == subject)
     user = db.exec(statement).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no existe.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no existe."
+        )
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario inactivo."
+        )
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Permite acceso a admin y superadmin."""
+    if current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador."
+        )
+    return current_user
+
+
+def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+    """Permite acceso solo a superadmin."""
+    if current_user.role != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de superadministrador."
+        )
+    return current_user

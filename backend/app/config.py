@@ -13,8 +13,11 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/matrix.db"
 
-    # Secreto compartido con Power Automate para validar webhooks
     webhook_secret: str = "CHANGE_ME_WEBHOOK_SECRET"
+
+    # Superadmin por defecto (cambiar en .env antes de iniciar)
+    superadmin_email: str = "admin@matrix.com"
+    superadmin_password: str = "Admin1234!"
 
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

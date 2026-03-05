@@ -1,12 +1,16 @@
 import React, { Suspense } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
 import { useAuthStore } from "@/store/authStore"
+import { canAccessSettings } from "@/lib/roles"
 import AppLayout from "@/components/layout/AppLayout"
 
-const LoginPage     = React.lazy(() => import("@/pages/LoginPage.tsx"))
-const DashboardPage = React.lazy(() => import("@/pages/DashboardPage.tsx"))
-const ProjectsPage  = React.lazy(() => import("@/pages/ProjectsPage.tsx"))
-const MatrixPage    = React.lazy(() => import("@/pages/MatrixPage.tsx"))
+const LoginPage         = React.lazy(() => import("@/pages/LoginPage"))
+const RegisterPage      = React.lazy(() => import("@/pages/RegisterPage"))
+const DashboardPage     = React.lazy(() => import("@/pages/DashboardPage"))
+const ProjectsPage      = React.lazy(() => import("@/pages/ProjectsPage"))
+const ProjectDetailPage = React.lazy(() => import("@/pages/ProjectDetailPage"))
+const MatrixPage        = React.lazy(() => import("@/pages/MatrixPage"))
+const SettingsPage      = React.lazy(() => import("@/pages/SettingsPage"))
 
 function Spinner() {
   return (
@@ -21,42 +25,35 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  if (!user) return <Navigate to="/login" replace />
+  if (!canAccessSettings(user)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
-        {/* Ruta pública */}
-        <Route path="/login" element={<LoginPage />} />
+        {/* Rutas públicas */}
+        <Route path="/login"    element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
-        {/* Rutas protegidas — todas comparten AppLayout */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout title="Dashboard" />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<DashboardPage />} />
-        </Route>
-
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout title="Proyectos" subtitle="Gestión de tus proyectos" />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/projects" element={<ProjectsPage />} />
-        </Route>
-
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout title="Matriz de Esfuerzo" subtitle="Posicionamiento estratégico de proyectos" />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/matrix" element={<MatrixPage />} />
+        {/* Rutas protegidas — todas bajo AppLayout */}
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route index                path="/"              element={<DashboardPage />} />
+          <Route                      path="/projects"      element={<ProjectsPage />} />
+          <Route                      path="/projects/:id"  element={<ProjectDetailPage />} />
+          <Route                      path="/matrix"        element={<MatrixPage />} />
+          <Route
+            path="/settings"
+            element={
+              <AdminRoute>
+                <SettingsPage />
+              </AdminRoute>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

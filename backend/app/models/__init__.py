@@ -1,10 +1,11 @@
 from app.models.user import User
 from app.models.project import Project
-from app.models.matrix import MatrixQuestion, MatrixEvaluation, EvaluationResponse
+from app.models.matrix import QuestionCategory, MatrixQuestion, MatrixEvaluation, EvaluationResponse
 
 __all__ = [
     "User",
     "Project",
+    "QuestionCategory",
     "MatrixQuestion",
     "MatrixEvaluation",
     "EvaluationResponse",

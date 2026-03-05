@@ -1,40 +1,32 @@
-import { useEffect } from "react"
-import { Outlet } from "react-router-dom"
-import Sidebar   from "./Sidebar"
-import TopBar    from "./TopBar"
-import MobileNav from "./MobileNav"
-import { useProjectStore } from "@/store/projectStore"
-import { WS_URL } from "@/lib/constants"
+import { Outlet, useLocation } from "react-router-dom"
+import Sidebar        from "./Sidebar"
+import TopBar         from "./TopBar"
+import MobileNav      from "./MobileNav"
+import ToastContainer from "@/components/ui/ToastContainer"
+import { useWebSocket } from "@/hooks/useWebSocket"
 
-interface AppLayoutProps {
-  title:    string
-  subtitle?: string
+// Mapa de rutas a títulos dinámicos
+const ROUTE_TITLES: Record<string, { title: string; subtitle?: string }> = {
+  "/":          { title: "Dashboard",           subtitle: "Resumen general"                          },
+  "/projects":  { title: "Proyectos",           subtitle: "Gestión de proyectos"                     },
+  "/matrix":    { title: "Matriz Estratégica",  subtitle: "Posicionamiento de proyectos"             },
+  "/settings":  { title: "Configuración",       subtitle: "Solo administradores"                     },
 }
 
-export default function AppLayout({ title, subtitle }: AppLayoutProps) {
-  const { setWsConnected } = useProjectStore()
+function getRouteInfo(pathname: string) {
+  // Ruta exacta
+  if (ROUTE_TITLES[pathname]) return ROUTE_TITLES[pathname]
+  // Ruta de detalle /projects/:id
+  if (pathname.startsWith("/projects/")) return { title: "Detalle del Proyecto", subtitle: "Historial y evaluaciones" }
+  return { title: "Project Matrix" }
+}
 
-  // WebSocket global — conecta una sola vez al montar el layout
-  useEffect(() => {
-    const ws = new WebSocket(WS_URL)
+export default function AppLayout() {
+  const location = useLocation()
+  const { title, subtitle } = getRouteInfo(location.pathname)
 
-    ws.onopen  = () => setWsConnected(true)
-    ws.onclose = () => setWsConnected(false)
-    ws.onerror = () => setWsConnected(false)
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        console.info("[WS]", msg.event, msg.data)
-        // Los hooks individuales de cada página escuchan el store
-        // El broadcast queda disponible para componentes hijos via projectStore
-      } catch {
-        // mensaje no JSON — ignorar
-      }
-    }
-
-    return () => ws.close()
-  }, [setWsConnected])
+  // WebSocket reactivo — una sola instancia para todo el layout
+  useWebSocket()
 
   return (
     <div className="flex min-h-screen bg-navy-950">
@@ -49,6 +41,7 @@ export default function AppLayout({ title, subtitle }: AppLayoutProps) {
       </div>
 
       <MobileNav />
+      <ToastContainer />
     </div>
   )
 }
