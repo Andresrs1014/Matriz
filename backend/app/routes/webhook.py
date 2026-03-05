@@ -14,11 +14,12 @@ class ListsWebhookPayload(BaseModel):
     """
     Payload que envía Power Automate cuando se crea/modifica un ítem en Microsoft Lists.
     Los campos deben coincidir con los que configures en el HTTP POST de Power Automate.
+    owner_id debe ser el id numérico del usuario en la BD (Power Automate puede enviarlo como string, Pydantic lo coerce a int).
     """
     title: str
     description: str | None = None
     status: str | None = "nuevo"
-    owner_id: str
+    owner_id: int
     ms_list_id: str | None = None
 
 
@@ -46,15 +47,15 @@ async def receive_lists_webhook(
         "ms_list_id": payload.ms_list_id,
     }
 
-    project = create_project(db=db, owner_email=payload.owner_email, data=data)
+    project = create_project(db=db, owner_id=payload.owner_id, data=data)
 
-    # Notificar en tiempo real al frontend
+    # Notificar en tiempo real al frontend — event_type debe coincidir con case en useWebSocket.ts
     await ws_manager.broadcast(
-        event_type="project_created_from_list",
+        event_type="project.webhook",
         payload={
             "project_id": project.id,
             "title": project.title,
-            "owner_email": project.owner_email,
+            "owner_id": project.owner_id,
         },
     )
 

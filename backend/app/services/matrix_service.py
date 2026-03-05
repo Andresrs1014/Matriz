@@ -153,14 +153,18 @@ def get_evaluations_for_project(db: Session, project_id: int, owner_id: int) -> 
     )
 
 
-def get_latest_evaluation_per_project(db: Session, owner_id: int) -> list[MatrixPlotPoint]:
+def get_latest_evaluation_per_project(db: Session, owner_id: int | None) -> list[MatrixPlotPoint]:
     """
     Para cada proyecto del usuario, trae SOLO la evaluación más reciente.
     Esto alimenta el gráfico de la matriz cuadrante en el frontend.
+    owner_id=None significa sin filtro (admin/superadmin ven todos los proyectos).
     """
-    projects = list(
-        db.exec(select(Project).where(Project.owner_id == owner_id))
-    )
+    if owner_id is None:
+        projects = list(db.exec(select(Project)))
+    else:
+        projects = list(
+            db.exec(select(Project).where(Project.owner_id == owner_id))
+        )
 
     plot_points: list[MatrixPlotPoint] = []
 

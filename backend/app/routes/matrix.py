@@ -101,10 +101,12 @@ def get_project_history(
     if current_user.role not in ("admin", "superadmin") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
 
+    # Pasamos el owner_id real del proyecto para que el servicio valide correctamente.
+    # El control de acceso ya se realizó arriba (admin puede ver cualquier proyecto).
     evaluations = get_evaluations_for_project(
         db,
         project_id=project_id,
-        owner_id=current_user.id,
+        owner_id=project.owner_id,
     )
     return [
         EvaluationRead(

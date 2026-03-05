@@ -36,4 +36,4 @@ export const QUADRANT_CONFIG = {
 export type QuadrantKey = keyof typeof QUADRANT_CONFIG
 
 export const API_BASE = "/api"
-export const WS_URL   = "ws://127.0.0.1:8000/ws"
+export const WS_URL   = import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8000/ws"

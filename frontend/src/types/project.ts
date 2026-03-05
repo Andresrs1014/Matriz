@@ -6,7 +6,7 @@ export interface Project {
   title:       string
   description: string | null
   status:      ProjectStatus
-  owner_email: string
+  owner_id:    number
   source:      ProjectSource
   ms_list_id:  string | null
   created_at:  string
