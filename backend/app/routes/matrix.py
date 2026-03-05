@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from typing import cast
+from sqlmodel import Session
 
 from app.core.dependencies import get_db, get_current_user
 from app.core.ws_manager import ws_manager
 from app.models.user import User
 from app.models.project import Project
-from app.models.matrix import MatrixEvaluation
 from app.schemas.matrix import (
     QuestionRead,
     EvaluationSubmit,
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/matrix", tags=["Matrix"])
 @router.get("/questions", response_model=list[QuestionRead])
 def list_questions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ):
     """Retorna las preguntas activas ordenadas por eje y posición."""
     return get_active_questions(db)
@@ -43,12 +43,14 @@ async def evaluate_project(
     Calcula impact_score, effort_score y cuadrante automáticamente.
     Emite evento WebSocket a todos los clientes conectados.
     """
+    assert current_user.id is not None
     evaluation = create_evaluation(
         db=db,
         project_id=project_id,
         owner_id=current_user.id,
         payload=payload,
     )
+    assert evaluation.id is not None
 
     await ws_manager.broadcast(
         event_type="evaluation_created",
@@ -110,7 +112,7 @@ def get_project_history(
     )
     return [
         EvaluationRead(
-            id=e.id,
+            id=cast(int, e.id),
             project_id=e.project_id,
             category_id=e.category_id,
             impact_score=e.impact_score,
