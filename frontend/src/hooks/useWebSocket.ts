@@ -55,6 +55,10 @@ export function useWebSocket() {
               toast.info(`Proyecto sincronizado desde Microsoft Lists: "${msg.data?.title ?? ""}"`)
               break
 
+            case "roi_evaluated":
+              toast.success(`ROI calculado: "${msg.data?.project_title ?? ""}" → ${msg.data?.cuadrante_roi ?? ""}`)
+              break
+
             default:
               break
           }

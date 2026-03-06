@@ -3,13 +3,16 @@ import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ArrowLeft, Calendar, ClipboardList,
-  TrendingUp, Zap, Target, Clock, RotateCcw
+  TrendingUp, Zap, Target, Clock, RotateCcw, DollarSign
 } from "lucide-react"
 import api from "@/lib/api"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
+import { ROI_QUADRANT_CONFIG, type ROICuadranteKey } from "@/types/roi"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
+import type { ROIRead } from "@/types/roi"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
+import ROIWizard        from "@/components/roi/ROIWizard"
 
 interface Evaluation {
   id:           number
@@ -35,17 +38,21 @@ export default function ProjectDetailPage() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [loading,     setLoading]     = useState(true)
   const [evaluating,  setEvaluating]  = useState(false)
+  const [roiData,     setRoiData]     = useState<ROIRead | null>(null)
+  const [roiOpen,     setRoiOpen]     = useState(false)
 
   async function fetchData() {
     if (!id) return
     setLoading(true)
     try {
-      const [projRes, evalRes] = await Promise.all([
+      const [projRes, evalRes, roiRes] = await Promise.all([
         api.get<Project>(`/projects/${id}`),
         api.get<Evaluation[]>(`/matrix/history/${id}`),
+        api.get<ROIRead>(`/roi/${id}`).catch(() => ({ data: null })),
       ])
       setProject(projRes.data)
       setEvaluations(evalRes.data)
+      setRoiData(roiRes.data)
     } catch {
       navigate("/projects")
     } finally {
@@ -68,6 +75,10 @@ export default function ProjectDetailPage() {
   const latestEval  = evaluations[0] ?? null
   const latestConfig = latestEval
     ? QUADRANT_CONFIG[latestEval.quadrant as QuadrantKey]
+    : null
+
+  const roiConfig = roiData
+    ? ROI_QUADRANT_CONFIG[roiData.cuadrante_roi as ROICuadranteKey]
     : null
 
   const statusConfig = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG]
@@ -113,13 +124,22 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => setEvaluating(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap"
-          >
-            <Target size={15} />
-            {latestEval ? "Re-evaluar" : "Evaluar"}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => setEvaluating(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap"
+            >
+              <Target size={15} />
+              {latestEval ? "Re-evaluar" : "Evaluar"}
+            </button>
+            <button
+              onClick={() => setRoiOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium hover:bg-emerald-500/20 transition-all whitespace-nowrap"
+            >
+              <DollarSign size={15} />
+              {roiData ? "Re-evaluar ROI" : "Evaluar ROI"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -156,6 +176,41 @@ export default function ProjectDetailPage() {
                   {latestEval.effort_score.toFixed(0)}
                   <span className="text-sm text-slate-500">/100</span>
                 </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ROI actual */}
+      {roiData && roiConfig && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn("glass-card p-5 border", roiConfig.bgClass, roiConfig.borderClass)}
+        >
+          <p className="text-xs text-slate-400 uppercase tracking-wider mb-4">Análisis de ROI</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className={cn("px-5 py-3 rounded-xl border w-fit", roiConfig.bgClass, roiConfig.borderClass)}>
+              <p className={cn("text-2xl font-bold", roiConfig.textClass)}>{roiConfig.label}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{roiConfig.action}</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-1">ROI</p>
+                <p className={cn("text-xl font-bold", roiConfig.textClass)}>{roiData.roi_pct.toFixed(1)}%</p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-1">Payback</p>
+                <p className="text-xl font-bold text-white">{roiData.payback_semanas.toFixed(0)}<span className="text-sm text-slate-500"> sem</span></p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-1">Ahorro anual</p>
+                <p className="text-lg font-bold text-emerald-400">${roiData.ahorro_anual.toLocaleString("es-CO")}</p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-1">Horas liberadas</p>
+                <p className="text-xl font-bold text-blue-400">{roiData.horas_liberadas_anio.toFixed(0)}<span className="text-sm text-slate-500">/año</span></p>
               </div>
             </div>
           </div>
@@ -245,6 +300,17 @@ export default function ProjectDetailPage() {
             projectId={project.id}
             projectName={project.title}
             onClose={() => { setEvaluating(false); fetchData() }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Wizard ROI */}
+      <AnimatePresence>
+        {roiOpen && (
+          <ROIWizard
+            projectId={project.id}
+            projectName={project.title}
+            onClose={() => { setRoiOpen(false); fetchData() }}
           />
         )}
       </AnimatePresence>

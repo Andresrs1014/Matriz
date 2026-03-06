@@ -14,6 +14,7 @@ from app.routes.matrix    import router as matrix_router
 from app.routes.webhook   import router as webhook_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.settings  import router as settings_router
+from app.routes.roi       import router as roi_router
 from app.seeds.questions_seed import seed_matrix_questions
 from app.seeds.admin_seed     import seed_superadmin
 
@@ -44,6 +45,7 @@ app.include_router(matrix_router)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
+app.include_router(roi_router)
 
 
 @app.websocket("/ws")
@@ -58,4 +60,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/health", tags=["Health"])
 def health():
-    return {"ok": True, "env": settings.env, "version": "0.4.0"}
+    return {"ok": True, "env": settings.env, "version": "0.2.0"}
