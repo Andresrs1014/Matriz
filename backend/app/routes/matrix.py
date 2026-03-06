@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import cast
 from sqlmodel import Session
 
@@ -7,12 +7,14 @@ from app.core.ws_manager import ws_manager
 from app.models.user import User
 from app.models.project import Project
 from app.schemas.matrix import (
+    CategoryRead,
     QuestionRead,
     EvaluationSubmit,
     EvaluationRead,
     MatrixPlotPoint,
 )
 from app.services.matrix_service import (
+    get_active_categories,
     get_active_questions,
     create_evaluation,
     get_evaluations_for_project,
@@ -22,13 +24,23 @@ from app.services.matrix_service import (
 router = APIRouter(prefix="/matrix", tags=["Matrix"])
 
 
-@router.get("/questions", response_model=list[QuestionRead])
-def list_questions(
+@router.get("/categories", response_model=list[CategoryRead])
+def list_categories(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Retorna las preguntas activas ordenadas por eje y posición."""
-    return get_active_questions(db)
+    """Retorna las categorías de evaluación activas."""
+    return get_active_categories(db)
+
+
+@router.get("/questions", response_model=list[QuestionRead])
+def list_questions(
+    category_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Retorna las preguntas activas. Si se pasa category_id, filtra por esa categoría."""
+    return get_active_questions(db, category_id=category_id)
 
 
 @router.post("/evaluate/{project_id}", response_model=EvaluationRead)
@@ -103,8 +115,6 @@ def get_project_history(
     if current_user.role not in ("admin", "superadmin") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
 
-    # Pasamos el owner_id real del proyecto para que el servicio valide correctamente.
-    # El control de acceso ya se realizó arriba (admin puede ver cualquier proyecto).
     evaluations = get_evaluations_for_project(
         db,
         project_id=project_id,

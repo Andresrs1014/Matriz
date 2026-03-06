@@ -1,12 +1,19 @@
 import type { QuadrantKey } from "@/lib/constants"
 
+export interface CategoryRead {
+  id:          number
+  name:        string
+  description: string | null
+  is_default:  boolean
+}
+
 export interface MatrixQuestion {
-  id:     number
-  key:    string
-  axis:   "impact" | "effort"
-  text:   string
-  weight: number
-  order:  number
+  id:          number
+  category_id: number | null
+  axis:        "impact" | "effort"
+  text:        string
+  weight:      number
+  order:       number
 }
 
 export interface EvaluationResponseInput {
@@ -15,19 +22,20 @@ export interface EvaluationResponseInput {
 }
 
 export interface EvaluationSubmit {
-  responses: EvaluationResponseInput[]
-  notes?:    string
+  responses:    EvaluationResponseInput[]
+  category_id?: number
+  notes?:       string
 }
 
 export interface EvaluationRead {
-  id:                 number
-  project_id:         number
-  evaluator_user_id:  number | null
-  impact_score:       number
-  effort_score:       number
-  quadrant:           QuadrantKey
-  notes:              string | null
-  created_at:         string
+  id:           number
+  project_id:   number
+  category_id:  number | null
+  impact_score: number
+  effort_score: number
+  quadrant:     QuadrantKey
+  notes:        string | null
+  created_at:   string
 }
 
 export interface MatrixPlotPoint {

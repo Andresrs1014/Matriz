@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from sqlmodel import Session, select, col
 
-from app.models.matrix import MatrixQuestion, MatrixEvaluation, EvaluationResponse
+from app.models.matrix import MatrixQuestion, MatrixEvaluation, EvaluationResponse, QuestionCategory
 from app.models.project import Project
 from app.schemas.matrix import EvaluationSubmit, EvaluationRead, MatrixPlotPoint, QuadrantSummary
 
@@ -49,8 +49,7 @@ def calculate_scores(
 ) -> tuple[float, float]:
     """
     Calcula impact_score y effort_score ponderados en escala 0-100.
-    Se obtienen las preguntas activas y sus pesos desde la BD para
-    que el algoritmo sea configurable sin tocar código.
+    Funciona con cualquier cantidad de preguntas (flexible por categoría).
     """
     question_ids = [r["question_id"] for r in responses]
     questions: list[MatrixQuestion] = list(
@@ -61,13 +60,15 @@ def calculate_scores(
         )
     )
 
-    if len(questions) != 10:
+    impact_qs = [q for q in questions if q.axis == "impact"]
+    effort_qs = [q for q in questions if q.axis == "effort"]
+
+    if not impact_qs or not effort_qs:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Se esperaban 10 preguntas activas, se recibieron {len(questions)}."
+            detail="La categoría debe tener al menos una pregunta de impacto y una de esfuerzo."
         )
 
-    q_map = {q.id: q for q in questions}
     resp_map = {r["question_id"]: r["value"] for r in responses}
 
     impact_weighted_sum = 0.0
@@ -91,17 +92,33 @@ def calculate_scores(
     return impact_score, effort_score
 
 
-# ── CRUD Evaluaciones ─────────────────────────────────────────────────────────
+# ── CRUD Categorías ────────────────────────────────────────────────────────────
 
-def get_active_questions(db: Session) -> list[MatrixQuestion]:
+def get_active_categories(db: Session) -> list[QuestionCategory]:
     return list(
         db.exec(
-            select(MatrixQuestion)
-            .where(MatrixQuestion.is_active == True)
-            .order_by(MatrixQuestion.axis, col(MatrixQuestion.order))
+            select(QuestionCategory)
+            .where(QuestionCategory.is_active == True)
+            .order_by(col(QuestionCategory.name))
         )
     )
 
+
+# ── CRUD Preguntas ─────────────────────────────────────────────────────────────
+
+def get_active_questions(db: Session, category_id: int | None = None) -> list[MatrixQuestion]:
+    query = (
+        select(MatrixQuestion)
+        .where(MatrixQuestion.is_active == True)
+    )
+    if category_id is not None:
+        query = query.where(MatrixQuestion.category_id == category_id)
+    return list(
+        db.exec(query.order_by(MatrixQuestion.axis, col(MatrixQuestion.order)))
+    )
+
+
+# ── CRUD Evaluaciones ─────────────────────────────────────────────────────────
 
 def create_evaluation(
     db: Session,
@@ -120,6 +137,7 @@ def create_evaluation(
 
     evaluation = MatrixEvaluation(
         project_id=project_id,
+        category_id=payload.category_id,
         impact_score=impact_score,
         effort_score=effort_score,
         quadrant=quadrant,

@@ -11,13 +11,21 @@ class EvaluationResponseInput(BaseModel):
 
 class EvaluationSubmit(BaseModel):
     responses: list[EvaluationResponseInput] = Field(
-        min_length=10, max_length=10,
-        description="Debe contener exactamente 10 respuestas (5 impacto + 5 esfuerzo)"
+        min_length=2,
+        description="Respuestas a las preguntas de la categoría seleccionada"
     )
+    category_id: int | None = Field(default=None)
     notes: str | None = Field(default=None, max_length=2000)
 
 
 # ── Response ─────────────────────────────────────────────────────────────────
+
+class CategoryRead(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    is_default: bool
+
 
 class QuestionRead(BaseModel):
     id: int
