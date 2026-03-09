@@ -1,18 +1,21 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Search, FolderKanban, Trash2, ClipboardList, Calendar } from "lucide-react"
+import { Plus, Search, FolderKanban, Trash2, ClipboardList, Calendar, Target, DollarSign, X } from "lucide-react"
 import { useProjects } from "@/hooks/useProjects"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
+import ROIWizard from "@/components/roi/ROIWizard"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
 
 const STATUS_CONFIG = {
-  nuevo:        { label: "Nuevo",       class: "bg-slate-500/20 text-slate-300 border-slate-500/30"   },
-  en_progreso:  { label: "En progreso", class: "bg-electric/20 text-electric border-electric/30"      },
-  completado:   { label: "Completado",  class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-  cancelado:    { label: "Cancelado",   class: "bg-red-500/20 text-red-400 border-red-500/30"         },
+  nuevo:       { label: "Nuevo",       class: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+  en_progreso: { label: "En progreso", class: "bg-electric/20 text-electric border-electric/30" },
+  completado:  { label: "Completado",  class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  cancelado:   { label: "Cancelado",   class: "bg-red-500/20 text-red-400 border-red-500/30" },
 }
+
+type EvalMode = "operacional" | "roi" | null
 
 export default function ProjectsPage() {
   const { projects, loading, createProject, deleteProject } = useProjects()
@@ -20,9 +23,9 @@ export default function ProjectsPage() {
 
   const [search,      setSearch]      = useState("")
   const [showCreate,  setShowCreate]  = useState(false)
-  const [evaluating,  setEvaluating]  = useState<Project | null>(null)
+  const [evalTarget,  setEvalTarget]  = useState<Project | null>(null)   // proyecto seleccionado
+  const [evalMode,    setEvalMode]    = useState<EvalMode>(null)          // qué wizard abrir
 
-  // Form de creación
   const [title,       setTitle]       = useState("")
   const [description, setDescription] = useState("")
   const [creating,    setCreating]    = useState(false)
@@ -40,6 +43,16 @@ export default function ProjectsPage() {
     setDescription("")
     setShowCreate(false)
     setCreating(false)
+  }
+
+  function handleEvaluar(project: Project) {
+    setEvalTarget(project)
+    setEvalMode(null)   // abre el modal de selección primero
+  }
+
+  function handleCloseWizard() {
+    setEvalTarget(null)
+    setEvalMode(null)
   }
 
   return (
@@ -69,53 +82,102 @@ export default function ProjectsPage() {
         {showCreate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
             <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
               className="glass-card p-6 w-full max-w-md"
             >
               <h2 className="text-white font-semibold mb-1">Nuevo Proyecto</h2>
               <p className="text-xs text-slate-400 mb-5">Los proyectos también pueden llegar desde Microsoft Lists.</p>
               <div className="laser-line-h mb-5 opacity-40" />
-
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs text-slate-400 uppercase tracking-wider">Nombre del proyecto *</label>
                   <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ej: Automatización de despachos"
-                    required
+                    value={title} onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Ej: Automatización de despachos" required
                     className="w-full px-4 py-2.5 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric transition-all"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs text-slate-400 uppercase tracking-wider">Descripción</label>
                   <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe brevemente el objetivo del proyecto..."
-                    rows={3}
+                    value={description} onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe brevemente el objetivo del proyecto..." rows={3}
                     className="w-full px-4 py-2.5 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric transition-all resize-none"
                   />
                 </div>
                 <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreate(false)}
-                    className="flex-1 py-2.5 rounded-lg border border-navy-600 text-slate-400 text-sm hover:text-white hover:border-navy-500 transition-all"
-                  >
+                  <button type="button" onClick={() => setShowCreate(false)}
+                    className="flex-1 py-2.5 rounded-lg border border-navy-600 text-slate-400 text-sm hover:text-white hover:border-navy-500 transition-all">
                     Cancelar
                   </button>
-                  <button
-                    type="submit"
-                    disabled={creating || !title.trim()}
-                    className="flex-1 py-2.5 rounded-lg bg-electric text-white text-sm font-medium hover:bg-electric-bright shadow-glow-blue disabled:opacity-40 transition-all"
-                  >
+                  <button type="submit" disabled={creating || !title.trim()}
+                    className="flex-1 py-2.5 rounded-lg bg-electric text-white text-sm font-medium hover:bg-electric-bright shadow-glow-blue disabled:opacity-40 transition-all">
                     {creating ? "Creando..." : "Crear proyecto"}
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal de selección: Operacional vs ROI ── */}
+      <AnimatePresence>
+        {evalTarget && evalMode === null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="glass-card p-6 w-full max-w-sm"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <h2 className="text-white font-semibold text-sm">Evaluar proyecto</h2>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[220px]">{evalTarget.title}</p>
+                </div>
+                <button onClick={handleCloseWizard} className="text-slate-500 hover:text-white transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="laser-line-h my-4 opacity-30" />
+
+              <p className="text-xs text-slate-400 mb-4">¿Qué tipo de evaluación deseas realizar?</p>
+
+              <div className="space-y-3">
+                {/* Opción Operacional */}
+                <button
+                  onClick={() => setEvalMode("operacional")}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-navy-800 border border-navy-700
+                             hover:border-electric/50 hover:bg-electric/5 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-electric/10 border border-electric/20 flex items-center justify-center flex-shrink-0 group-hover:bg-electric/20 transition-all">
+                    <Target size={18} className="text-electric" />
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-medium">Esfuerzo e Impacto</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5">Matriz operacional — priorización estratégica</p>
+                  </div>
+                </button>
+
+                {/* Opción ROI */}
+                <button
+                  onClick={() => setEvalMode("roi")}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-navy-800 border border-navy-700
+                             hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-500/20 transition-all">
+                    <DollarSign size={18} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-medium">ROI Evaluado</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5">Retorno sobre inversión — ahorro en horas y COP</p>
+                  </div>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -139,10 +201,8 @@ export default function ProjectsPage() {
             {filtered.map((project, i) => (
               <motion.div
                 key={project.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: i * 0.05 }}
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: i * 0.05 }}
                 className="glass-card p-5 flex flex-col gap-4 hover:border-electric/30 transition-all group"
               >
                 {/* Título + badge estado */}
@@ -161,12 +221,10 @@ export default function ProjectsPage() {
                   </span>
                 </div>
 
-                {/* Descripción */}
                 {project.description && (
                   <p className="text-slate-400 text-xs leading-relaxed line-clamp-2">{project.description}</p>
                 )}
 
-                {/* Fuente + fecha */}
                 <div className="flex items-center gap-3 text-xs text-slate-500">
                   <span className="flex items-center gap-1">
                     <ClipboardList size={11} />
@@ -178,20 +236,22 @@ export default function ProjectsPage() {
                   </span>
                 </div>
 
-                {/* Línea sable */}
                 <div className="laser-line-h opacity-20 group-hover:opacity-50 transition-opacity" />
 
                 {/* Acciones */}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setEvaluating(project)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-electric/10 border border-electric/30 text-electric text-xs font-medium hover:bg-electric/20 transition-all"
+                    onClick={() => handleEvaluar(project)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg
+                               bg-electric/10 border border-electric/30 text-electric text-xs
+                               font-medium hover:bg-electric/20 transition-all"
                   >
-                    Evaluar en Matriz
+                    Evaluar proyecto
                   </button>
                   <button
                     onClick={() => deleteProject(project.id)}
-                    className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+                    className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10
+                               border border-transparent hover:border-red-500/20 transition-all"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -202,13 +262,20 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Wizard de evaluación */}
+      {/* ── Wizards ── */}
       <AnimatePresence>
-        {evaluating && (
+        {evalTarget && evalMode === "operacional" && (
           <EvaluationWizard
-            projectId={evaluating.id}
-            projectName={evaluating.title}
-            onClose={() => setEvaluating(null)}
+            projectId={evalTarget.id}
+            projectName={evalTarget.title}
+            onClose={handleCloseWizard}
+          />
+        )}
+        {evalTarget && evalMode === "roi" && (
+          <ROIWizard
+            projectId={evalTarget.id}
+            projectName={evalTarget.title}
+            onClose={handleCloseWizard}
           />
         )}
       </AnimatePresence>

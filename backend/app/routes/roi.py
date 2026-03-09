@@ -72,3 +72,13 @@ def get_roi(
 ):
     """Última evaluación ROI de un proyecto. Devuelve null si no tiene."""
     return get_latest_roi(db, project_id)
+
+@router.get("/history/{project_id}", response_model=list[ROIRead])
+def get_history(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    from app.services.roi_service import get_roi_history
+    return get_roi_history(db, project_id)
+
