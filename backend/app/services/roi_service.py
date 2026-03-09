@@ -1,79 +1,102 @@
 from typing import cast
 from sqlmodel import Session, select, col
-
 from app.models.project import Project
 from app.models.roi import ROIEvaluation
-from app.schemas.roi import ROIInput, ROIPlotPoint
+from app.schemas.roi import ROIParte1Input, ROIParte2Input, ROIPlotPoint
+
+# ── Umbrales de cuadrantes ────────────────────────────────────────────────────
+ROI_PCT_UMBRAL = 50.0   # >= 50% horas ahorradas vs actuales → alto impacto
+HORAS_UMBRAL   = 4.0    # >= 4 horas ahorradas → proceso relevante
 
 
-# ── Umbrales de clasificación ──────────────────────────────────────────────────
-ROI_UMBRAL_PCT         = 100.0   # ROI >= 100 % → alto (dobla la inversión)
-PAYBACK_UMBRAL_SEMANAS = 26.0    # ≤ 26 semanas (6 meses) → payback rápido
+def _calcular_valor_hora(salario_base: float) -> dict:
+    """Mes de 30 días calendario, jornada de 8 horas."""
+    return {
+        "valor_quincena":   round(salario_base / 2, 2),
+        "valor_dia":        round(salario_base / 30, 2),
+        "valor_hora_hombre": round(salario_base / (30 * 8), 2),
+    }
 
 
-def assign_roi_quadrant(roi_pct: float, payback_semanas: float) -> str:
+def assign_roi_quadrant(roi_pct: float, horas_ahorradas: float) -> str:
     """
-    Cuadrantes:
-      rentable_rapido → alto ROI + payback rápido  → Ejecutar ya
-      rentable_lento  → alto ROI + payback lento   → Planificar
-      dudoso_rapido   → bajo ROI + payback rápido  → Evaluar
-      no_justificado  → bajo ROI + payback lento   → Descartar
+    Ejes:
+      X → horas_proceso_actual  (peso del proceso hoy)
+      Y → horas_ahorradas       (mejora real)
+
+    alto_impacto     → roi_pct >= 50% Y horas >= 4  → Ejecutar ya      🟢
+    eficiencia_menor → roi_pct >= 50% Y horas < 4   → Planificar       🔵
+    proceso_pesado   → roi_pct < 50%  Y horas >= 4  → Evaluar          🟡
+    bajo_impacto     → roi_pct < 50%  Y horas < 4   → Revisar          🔴
     """
-    alto_roi    = roi_pct >= ROI_UMBRAL_PCT
-    pago_rapido = payback_semanas <= PAYBACK_UMBRAL_SEMANAS
+    alto_roi    = roi_pct >= ROI_PCT_UMBRAL
+    ahorra_bien = horas_ahorradas >= HORAS_UMBRAL
 
-    if alto_roi and pago_rapido:
-        return "rentable_rapido"
-    if alto_roi and not pago_rapido:
-        return "rentable_lento"
-    if not alto_roi and pago_rapido:
-        return "dudoso_rapido"
-    return "no_justificado"
+    if alto_roi and ahorra_bien:
+        return "alto_impacto"
+    if alto_roi and not ahorra_bien:
+        return "eficiencia_menor"
+    if not alto_roi and ahorra_bien:
+        return "proceso_pesado"
+    return "bajo_impacto"
 
 
-def calculate_roi(data: ROIInput) -> dict:
-    """
-    Fórmulas:
-      costo_total          = (horas_inversion × valor_hora) + costo_infraestructura
-      ahorro_semanal       = horas_ahorradas_semana × valor_hora
-      ahorro_anual         = (ahorro_semanal × semanas_anio) + ahorro_directo + ahorro_errores
-      horas_liberadas_anio = horas_ahorradas_semana × semanas_anio
-      roi_pct              = ((ahorro_anual - costo_total) / costo_total) × 100
-      payback_semanas      = costo_total / ahorro_semanal
-    """
-    costo_total          = (data.horas_inversion * data.valor_hora) + data.costo_infraestructura
-    ahorro_semanal       = data.horas_ahorradas_semana * data.valor_hora
-    ahorro_anual         = (ahorro_semanal * data.semanas_anio) + data.ahorro_directo + data.ahorro_errores
-    horas_liberadas_anio = data.horas_ahorradas_semana * data.semanas_anio
+def calculate_roi(parte1: ROIParte1Input, parte2: ROIParte2Input) -> dict:
+    valores = _calcular_valor_hora(parte1.salario_base)
+    valor_hora = valores["valor_hora_hombre"]
 
-    roi_pct         = round(((ahorro_anual - costo_total) / costo_total) * 100, 2) if costo_total > 0 else 0.0
-    payback_semanas = round(costo_total / ahorro_semanal, 2) if ahorro_semanal > 0 else 9999.0
+    horas_ahorradas  = round(parte2.horas_proceso_actual - parte2.horas_proyectadas, 2)
+    roi_valor        = round(horas_ahorradas * valor_hora, 2)             # 1 persona
+    roi_valor_total  = round(roi_valor * parte1.num_personas, 2)          # todas las personas
+    roi_pct          = round(
+        (horas_ahorradas / parte2.horas_proceso_actual) * 100, 2
+    ) if parte2.horas_proceso_actual > 0 else 0.0
 
     return {
-        "costo_total":          round(costo_total, 2),
-        "ahorro_anual":         round(ahorro_anual, 2),
-        "horas_liberadas_anio": round(horas_liberadas_anio, 2),
-        "roi_pct":              roi_pct,
-        "payback_semanas":      payback_semanas,
-        "cuadrante_roi":        assign_roi_quadrant(roi_pct, payback_semanas),
+        **valores,
+        "horas_ahorradas":  horas_ahorradas,
+        "roi_valor":        roi_valor,
+        "roi_valor_total":  roi_valor_total,
+        "roi_pct":          roi_pct,
+        "cuadrante_roi":    assign_roi_quadrant(roi_pct, horas_ahorradas),
     }
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
-
-def create_roi_evaluation(db: Session, project_id: int, data: ROIInput) -> ROIEvaluation:
-    calculated = calculate_roi(data)
+def create_roi_parte1(db: Session, project_id: int, parte1: ROIParte1Input) -> ROIEvaluation:
+    """Crea la evaluación ROI con datos del jefe. Parte 2 pendiente."""
+    valores = _calcular_valor_hora(parte1.salario_base)
     evaluation = ROIEvaluation(
         project_id=project_id,
-        horas_inversion=data.horas_inversion,
-        valor_hora=data.valor_hora,
-        costo_infraestructura=data.costo_infraestructura,
-        horas_ahorradas_semana=data.horas_ahorradas_semana,
-        semanas_anio=data.semanas_anio,
-        ahorro_directo=data.ahorro_directo,
-        ahorro_errores=data.ahorro_errores,
-        **calculated,
+        cargo=parte1.cargo,
+        sede=parte1.sede,
+        num_personas=parte1.num_personas,
+        salario_base=parte1.salario_base,
+        **valores,
     )
+    db.add(evaluation)
+    db.commit()
+    db.refresh(evaluation)
+    return evaluation
+
+
+def update_roi_parte2(
+    db: Session,
+    evaluation: ROIEvaluation,
+    parte1: ROIParte1Input,
+    parte2: ROIParte2Input,
+) -> ROIEvaluation:
+    """Actualiza con proyección del analista y recalcula todo."""
+    calculated = calculate_roi(parte1, parte2)
+
+    evaluation.horas_proceso_actual = parte2.horas_proceso_actual
+    evaluation.horas_proyectadas    = parte2.horas_proyectadas
+    evaluation.horas_ahorradas      = calculated["horas_ahorradas"]
+    evaluation.roi_valor            = calculated["roi_valor"]
+    evaluation.roi_valor_total      = calculated["roi_valor_total"]
+    evaluation.roi_pct              = calculated["roi_pct"]
+    evaluation.cuadrante_roi        = calculated["cuadrante_roi"]
+
     db.add(evaluation)
     db.commit()
     db.refresh(evaluation)
@@ -88,32 +111,25 @@ def get_latest_roi(db: Session, project_id: int) -> ROIEvaluation | None:
     ).first()
 
 
-def get_roi_history(db: Session, project_id: int) -> list[ROIEvaluation]:
-    return list(
-        db.exec(
-            select(ROIEvaluation)
-            .where(ROIEvaluation.project_id == project_id)
-            .order_by(col(ROIEvaluation.created_at).desc())
-        )
-    )
-
-
-def get_roi_plot_points(db: Session, owner_id: int | None) -> list[ROIPlotPoint]:
-    """Un punto ROI por proyecto (la evaluación más reciente)."""
-    if owner_id is None:
-        projects = list(db.exec(select(Project)))
-    else:
-        projects = list(db.exec(select(Project).where(Project.owner_id == owner_id)))
+def get_roi_plot_points(db: Session, owner_id: int | None = None) -> list[ROIPlotPoint]:
+    """Un punto por proyecto — evaluación ROI más reciente."""
+    query = select(Project)
+    if owner_id is not None:
+        query = query.where(Project.owner_id == owner_id)
+    projects = list(db.exec(query))
 
     points: list[ROIPlotPoint] = []
     for project in projects:
         latest = get_latest_roi(db, cast(int, project.id))
-        if latest:
+        if latest and latest.horas_proceso_actual > 0:  # solo evaluaciones completas
             points.append(ROIPlotPoint(
                 project_id=cast(int, project.id),
                 project_title=project.title,
+                horas_proceso_actual=latest.horas_proceso_actual,
+                horas_ahorradas=latest.horas_ahorradas,
                 roi_pct=latest.roi_pct,
-                payback_semanas=latest.payback_semanas,
+                roi_valor_total=latest.roi_valor_total,
+                num_personas=latest.num_personas,
                 cuadrante_roi=latest.cuadrante_roi,
                 roi_id=cast(int, latest.id),
                 evaluated_at=latest.created_at,
