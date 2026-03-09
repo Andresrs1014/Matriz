@@ -201,16 +201,16 @@ export default function ProjectDetailPage() {
                 <p className={cn("text-xl font-bold", roiConfig.textClass)}>{roiData.roi_pct.toFixed(1)}%</p>
               </div>
               <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">Payback</p>
-                <p className="text-xl font-bold text-white">{roiData.payback_semanas.toFixed(0)}<span className="text-sm text-slate-500"> sem</span></p>
+                <p className="text-xs text-slate-400 mb-1">Horas antes</p>
+                <p className="text-xl font-bold text-white">{roiData.horas_proceso_actual.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
               </div>
               <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">Ahorro anual</p>
-                <p className="text-lg font-bold text-emerald-400">${roiData.ahorro_anual.toLocaleString("es-CO")}</p>
+                <p className="text-xs text-slate-400 mb-1">Horas proyectadas</p>
+                <p className="text-xl font-bold text-blue-400">{roiData.horas_proyectadas.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
               </div>
               <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">Horas liberadas</p>
-                <p className="text-xl font-bold text-blue-400">{roiData.horas_liberadas_anio.toFixed(0)}<span className="text-sm text-slate-500">/año</span></p>
+                <p className="text-xs text-slate-400 mb-1">Horas ahorradas</p>
+                <p className="text-xl font-bold text-emerald-400">{roiData.horas_ahorradas.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
               </div>
             </div>
           </div>

@@ -1,11 +1,10 @@
 import { useState, useCallback } from "react"
 import api from "@/lib/api"
-import type { ROIRead, ROIInput, ROIPlotPoint } from "@/types/roi"
+import type { ROIRead, ROIParte1Input, ROIParte2Input, ROIPlotPoint } from "@/types/roi"
 
 
 export function useROI(projectId: number) {
   const [roiData,    setRoiData]    = useState<ROIRead | null>(null)
-  const [roiHistory, setRoiHistory] = useState<ROIRead[]>([])
   const [loading,    setLoading]    = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -21,19 +20,10 @@ export function useROI(projectId: number) {
     }
   }, [projectId])
 
-  const fetchROIHistory = useCallback(async () => {
-    try {
-      const res = await api.get<ROIRead[]>(`/roi/history/${projectId}`)
-      setRoiHistory(res.data)
-    } catch {
-      setRoiHistory([])
-    }
-  }, [projectId])
-
-  const submitROI = useCallback(async (input: ROIInput): Promise<ROIRead> => {
+  const submitROIParte1 = useCallback(async (data: ROIParte1Input): Promise<ROIRead> => {
     setSubmitting(true)
     try {
-      const res = await api.post<ROIRead>(`/roi/evaluate/${projectId}`, input)
+      const res = await api.post<ROIRead>(`/roi/${projectId}/parte1`, data)
       setRoiData(res.data)
       return res.data
     } finally {
@@ -41,7 +31,18 @@ export function useROI(projectId: number) {
     }
   }, [projectId])
 
-  return { roiData, roiHistory, loading, submitting, fetchROI, fetchROIHistory, submitROI }
+  const submitROIParte2 = useCallback(async (data: ROIParte2Input): Promise<ROIRead> => {
+    setSubmitting(true)
+    try {
+      const res = await api.patch<ROIRead>(`/roi/${projectId}/parte2`, data)
+      setRoiData(res.data)
+      return res.data
+    } finally {
+      setSubmitting(false)
+    }
+  }, [projectId])
+
+  return { roiData, loading, submitting, fetchROI, submitROIParte1, submitROIParte2 }
 }
 
 
@@ -52,7 +53,7 @@ export function useROIPlot() {
   const fetchROIPlot = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await api.get<ROIPlotPoint[]>("/roi/plot")
+      const res = await api.get<ROIPlotPoint[]>("/roi/plot/all")
       setRoiPlotPoints(res.data)
     } catch {
       setRoiPlotPoints([])

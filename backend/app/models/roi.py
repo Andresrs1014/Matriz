@@ -1,32 +1,35 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import ClassVar, Optional
 from sqlmodel import SQLModel, Field
 
 
 class ROIEvaluation(SQLModel, table=True):
-    __tablename__ = "roievaluation"
+    __tablename__: ClassVar[str] = "roievaluation"
 
-    id:         Optional[int] = Field(default=None, primary_key=True)
-    project_id: int           = Field(index=True, foreign_key="project.id", nullable=False)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(index=True, foreign_key="project.id", nullable=False)
 
-    # ── Inputs: costos ──────────────────────────────────────────────────────────
-    horas_inversion:       float = Field(nullable=False)
-    valor_hora:            float = Field(nullable=False)
-    costo_infraestructura: float = Field(default=0.0)
+    # ── Parte 1 — datos del jefe ─────────────────────────────────────────────
+    cargo: str = Field(nullable=False)
+    sede: str = Field(nullable=False)
+    num_personas: int = Field(default=1, nullable=False)
+    salario_base: float = Field(nullable=False)  # no se expone en Read
 
-    # ── Inputs: beneficios ───────────────────────────────────────────────────────
-    horas_ahorradas_semana: float = Field(nullable=False)
-    semanas_anio:           int   = Field(default=48)
-    ahorro_directo:         float = Field(default=0.0)
-    ahorro_errores:         float = Field(default=0.0)
+    # Calculados desde salario_base
+    valor_quincena: float = Field(nullable=False)
+    valor_dia: float = Field(nullable=False)
+    valor_hora_hombre: float = Field(nullable=False)
 
-    # ── Outputs calculados ───────────────────────────────────────────────────────
-    costo_total:          float = Field(nullable=False)
-    ahorro_anual:         float = Field(nullable=False)
-    horas_liberadas_anio: float = Field(nullable=False)
-    roi_pct:              float = Field(nullable=False)
-    payback_semanas:      float = Field(nullable=False)
-    cuadrante_roi:        str   = Field(nullable=False, max_length=30)
+    # ── Parte 2 — proyección del analista ────────────────────────────────────
+    horas_proceso_actual: float = Field(default=0.0, nullable=False)
+    horas_proyectadas: float = Field(default=0.0, nullable=False)
+
+    # ── Calculados automáticamente ───────────────────────────────────────────
+    horas_ahorradas: float = Field(default=0.0, nullable=False)
+    roi_valor: float = Field(default=0.0, nullable=False)       # en COP
+    roi_valor_total: float = Field(default=0.0, nullable=False) # roi_valor × num_personas
+    roi_pct: float = Field(default=0.0, nullable=False)
+    cuadrante_roi: str = Field(default="sin_evaluar", nullable=False)
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), nullable=False
