@@ -7,137 +7,185 @@ interface Props {
   points: ROIPlotPoint[]
 }
 
-const W = 560
-const H = 460
-const PAD = { top: 24, right: 24, bottom: 52, left: 60 }
-const PW = W - PAD.left - PAD.right
-const PH = H - PAD.top - PAD.bottom
+// ── Canvas — igual que MatrixPlot ─────────────────────────────────────────────
+const W   = 560
+const H   = 480
+const PAD = 48
 
-// Umbrales dinámicos desde los datos (percentil 50)
-function computeRanges(points: ROIPlotPoint[]) {
-  const maxX = Math.max(...points.map((p) => p.horas_proceso_actual), 10)
-  const maxY = Math.max(...points.map((p) => p.horas_ahorradas), 5)
-  const xMax = Math.ceil(maxX / 10) * 10 + 10
-  const yMax = Math.ceil(maxY / 5) * 5 + 5
-  // Umbrales en el punto medio del rango
-  const xUmbral = xMax / 2
-  const yUmbral = yMax / 2
-  return { xMax, yMax, xUmbral, yUmbral }
+// Centro exacto del SVG — siempre centrado como MatrixPlot
+// const cx = W / 2
+// const cy = H / 2
+
+// ── Normalización de scores a 0–100 para posicionar burbujas ─────────────────
+// Eje X: roi_pct  → umbral en 50% → mapeamos al centro
+// Eje Y: horas_ahorradas → umbral en 4h → mapeamos al centro
+// Estrategia: normalizar cada punto relativo al umbral para que el umbral = 50 score
+// function normalizeX(roi_pct: number, maxRoi: number): number {
+//   // roi_pct / maxRoi * 100  → escala 0-100 donde maxRoi = borde derecho
+//   return Math.min((roi_pct / maxRoi) * 100, 99)
+// }
+
+// function normalizeY(horas: number, maxHoras: number): number {
+//   return Math.min((horas / maxHoras) * 100, 99)
+// }
+
+function scoreToX(score: number) { return PAD + (score / 100) * (W - PAD * 2) }
+function scoreToY(score: number) { return H - PAD - (score / 100) * (H - PAD * 2) }
+
+// maxRoi = 2 * umbral (100%) → umbral queda justo en el centro
+// maxHoras = 2 * umbral (8h) → umbral queda justo en el centro
+const ROI_PCT_UMBRAL = 50
+const HORAS_UMBRAL   = 4
+const MAX_ROI_SCALE  = ROI_PCT_UMBRAL * 2   // 100% → umbral en centro
+const MAX_HORAS_SCALE = HORAS_UMBRAL * 2    // 8h   → umbral en centro
+
+const LABEL_STYLE = { fontSize: 11, fontWeight: 700, fill: "#64748b", letterSpacing: "0.08em" } as const
+
+// Colores por cuadrante para los fondos
+const QUAD_COLORS = {
+  proceso_pesado:   { fill: "rgba(251,191,36,0.04)",  stroke: "rgba(251,191,36,0.12)"  },  // top-left
+  alto_impacto:     { fill: "rgba(52,211,153,0.05)",  stroke: "rgba(52,211,153,0.15)"  },  // top-right
+  bajo_impacto:     { fill: "rgba(148,163,184,0.03)", stroke: "rgba(148,163,184,0.08)" },  // bot-left
+  eficiencia_menor: { fill: "rgba(129,140,248,0.04)", stroke: "rgba(129,140,248,0.12)" },  // bot-right
 }
-
-function toX(val: number, xMax: number) { return PAD.left + (val / xMax) * PW }
-function toY(val: number, yMax: number) { return PAD.top + PH - (val / yMax) * PH }
-
-const QUAD_LABELS = [
-  // alto_impacto: proceso liviano (X bajo) + mucho ahorro (Y alto)
-  { key: "alto_impacto",     xFrac: 0.18, yFrac: 0.15 },
-  // proceso_pesado: proceso pesado (X alto) + mucho ahorro (Y alto)
-  { key: "proceso_pesado",   xFrac: 0.68, yFrac: 0.15 },
-  // eficiencia_menor: proceso liviano (X bajo) + poco ahorro (Y bajo)
-  { key: "eficiencia_menor", xFrac: 0.18, yFrac: 0.78 },
-  // bajo_impacto: proceso pesado (X alto) + poco ahorro (Y bajo)
-  { key: "bajo_impacto",     xFrac: 0.68, yFrac: 0.78 },
-] as const
 
 export default function ROIMatrixPlot({ points }: Props) {
   const [hovered, setHovered] = useState<number | null>(null)
 
-  const { xMax, yMax, xUmbral, yUmbral } =
-    points.length > 0 ? computeRanges(points) : { xMax: 20, yMax: 10, xUmbral: 10, yUmbral: 5 }
+  // Calcular el máximo real para escalar correctamente cuando hay valores > umbral*2
+  const maxRoi   = Math.max(...points.map(p => p.roi_pct),   MAX_ROI_SCALE)
+  const maxHoras = Math.max(...points.map(p => p.horas_ahorradas), MAX_HORAS_SCALE)
 
-  const divX = toX(xUmbral, xMax)
-  const divY = toY(yUmbral, yMax)
+  // Valores en px de los umbrales (siempre centro porque maxRoi = al menos umbral*2)
+  const umbralXScore = (ROI_PCT_UMBRAL / maxRoi) * 100
+  const umbralYScore = (HORAS_UMBRAL   / maxHoras) * 100
+  const umbralXpx = scoreToX(umbralXScore)
+  const umbralYpx = scoreToY(umbralYScore)
 
-  const xTicks = Array.from({ length: 5 }, (_, i) => Math.round((xMax / 4) * i))
-  const yTicks = Array.from({ length: 5 }, (_, i) => Math.round((yMax / 4) * i))
+  // Ticks del eje X (roi_pct %)
+  const xTickCount = 5
+  const xTicks = Array.from({ length: xTickCount + 1 }, (_, i) =>
+    parseFloat(((maxRoi / xTickCount) * i).toFixed(1))
+  )
+  // Ticks del eje Y (horas ahorradas)
+  const yTickCount = 5
+  const yTicks = Array.from({ length: yTickCount + 1 }, (_, i) =>
+    parseFloat(((maxHoras / yTickCount) * i).toFixed(1))
+  )
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        width="100%"
-        style={{ maxWidth: W, display: "block", margin: "0 auto" }}
+        className="w-full max-w-2xl mx-auto"
+        style={{ minWidth: 320 }}
       >
-        {/* Cuadrantes coloreados */}
-        <rect x={PAD.left} y={PAD.top} width={divX - PAD.left} height={divY - PAD.top} className="fill-emerald-500/8" />
-        <rect x={divX} y={PAD.top} width={PAD.left + PW - divX} height={divY - PAD.top} className="fill-blue-500/8" />
-        <rect x={PAD.left} y={divY} width={divX - PAD.left} height={PAD.top + PH - divY} className="fill-amber-500/8" />
-        <rect x={divX} y={divY} width={PAD.left + PW - divX} height={PAD.top + PH - divY} className="fill-rose-500/8" />
+        {/* ── Fondos de cuadrante con stroke — igual que MatrixPlot ── */}
+        {/* proceso_pesado: top-left (roi bajo, horas altas) */}
+        <rect
+          x={PAD} y={PAD}
+          width={umbralXpx - PAD} height={umbralYpx - PAD}
+          fill={QUAD_COLORS.proceso_pesado.fill}
+          stroke={QUAD_COLORS.proceso_pesado.stroke}
+          strokeWidth={1} rx={8}
+        />
+        {/* alto_impacto: top-right (roi alto, horas altas) */}
+        <rect
+          x={umbralXpx} y={PAD}
+          width={W - umbralXpx - PAD} height={umbralYpx - PAD}
+          fill={QUAD_COLORS.alto_impacto.fill}
+          stroke={QUAD_COLORS.alto_impacto.stroke}
+          strokeWidth={1} rx={8}
+        />
+        {/* bajo_impacto: bot-left (roi bajo, horas bajas) */}
+        <rect
+          x={PAD} y={umbralYpx}
+          width={umbralXpx - PAD} height={H - umbralYpx - PAD}
+          fill={QUAD_COLORS.bajo_impacto.fill}
+          stroke={QUAD_COLORS.bajo_impacto.stroke}
+          strokeWidth={1} rx={8}
+        />
+        {/* eficiencia_menor: bot-right (roi alto, horas bajas) */}
+        <rect
+          x={umbralXpx} y={umbralYpx}
+          width={W - umbralXpx - PAD} height={H - umbralYpx - PAD}
+          fill={QUAD_COLORS.eficiencia_menor.fill}
+          stroke={QUAD_COLORS.eficiencia_menor.stroke}
+          strokeWidth={1} rx={8}
+        />
 
-        {/* Borde del área */}
-        <rect x={PAD.left} y={PAD.top} width={PW} height={PH} fill="none" stroke="#1e2d4a" strokeWidth="1" />
+        {/* ── Ejes con glow azul — igual que MatrixPlot ── */}
+        {/* Eje vertical en el umbral X */}
+        <line
+          x1={umbralXpx} y1={PAD - 10}
+          x2={umbralXpx} y2={H - PAD + 10}
+          stroke="#3b82f6" strokeWidth={1.5}
+          style={{ filter: "drop-shadow(0 0 4px rgba(59,130,246,0.7))" }}
+        />
+        {/* Eje horizontal en el umbral Y */}
+        <line
+          x1={PAD - 10} y1={umbralYpx}
+          x2={W - PAD + 10} y2={umbralYpx}
+          stroke="#3b82f6" strokeWidth={1.5}
+          style={{ filter: "drop-shadow(0 0 4px rgba(59,130,246,0.7))" }}
+        />
 
-        {/* Líneas divisoras */}
-        <line x1={divX} y1={PAD.top} x2={divX} y2={PAD.top + PH} stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="6 4" opacity="0.5" />
-        <line x1={PAD.left} y1={divY} x2={PAD.left + PW} y2={divY} stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="6 4" opacity="0.5" />
+        {/* ── Flechas de ejes — igual que MatrixPlot ── */}
+        {/* Arriba */}
+        <polygon points={`${umbralXpx},${PAD - 18} ${umbralXpx - 5},${PAD - 8} ${umbralXpx + 5},${PAD - 8}`} fill="#3b82f6" />
+        {/* Abajo */}
+        <polygon points={`${umbralXpx},${H - PAD + 18} ${umbralXpx - 5},${H - PAD + 8} ${umbralXpx + 5},${H - PAD + 8}`} fill="#3b82f6" />
+        {/* Derecha */}
+        <polygon points={`${W - PAD + 18},${umbralYpx} ${W - PAD + 8},${umbralYpx - 5} ${W - PAD + 8},${umbralYpx + 5}`} fill="#3b82f6" />
+        {/* Izquierda */}
+        <polygon points={`${PAD - 18},${umbralYpx} ${PAD - 8},${umbralYpx - 5} ${PAD - 8},${umbralYpx + 5}`} fill="#3b82f6" />
 
-        {/* Etiquetas de cuadrantes */}
-        {QUAD_LABELS.map(({ key, xFrac, yFrac }) => {
-          const c = ROI_QUADRANT_CONFIG[key]
-          const lx = PAD.left + PW * xFrac
-          const ly = PAD.top + PH * yFrac
-          return (
-            <g key={key}>
-              <text x={lx} y={ly} textAnchor="middle" fontSize="9" fill={c.color} opacity="0.7" fontWeight="600">
-                {c.label.toUpperCase()}
-              </text>
-              <text x={lx} y={ly + 13} textAnchor="middle" fontSize="8" fill={c.color} opacity="0.45">
-                {c.action}
-              </text>
-            </g>
-          )
-        })}
+        {/* ── Labels de ejes — igual que MatrixPlot ── */}
+        <text x={umbralXpx} y={12}      textAnchor="middle" {...LABEL_STYLE}>ALTO AHORRO</text>
+        <text x={umbralXpx} y={H - 4}   textAnchor="middle" {...LABEL_STYLE}>BAJO AHORRO</text>
+        <text x={8}         y={umbralYpx + 4} textAnchor="middle" {...LABEL_STYLE}
+          transform={`rotate(-90, 8, ${umbralYpx})`}>BAJO ROI</text>
+        <text x={W - 8}     y={umbralYpx + 4} textAnchor="middle" {...LABEL_STYLE}
+          transform={`rotate(90, ${W - 8}, ${umbralYpx})`}>ALTO ROI</text>
 
-        {/* Ticks eje X (Horas proceso actual) */}
+        {/* ── Labels de cuadrantes ── */}
+        <text x={PAD + 10}       y={PAD + 22} fontSize={12} fontWeight={700} fill="rgba(251,191,36,0.6)">PROCESO PESADO</text>
+        <text x={umbralXpx + 10} y={PAD + 22} fontSize={12} fontWeight={700} fill="rgba(52,211,153,0.6)">ALTO IMPACTO</text>
+        <text x={PAD + 10}       y={H - PAD - 10} fontSize={12} fontWeight={700} fill="rgba(148,163,184,0.5)">BAJO IMPACTO</text>
+        <text x={umbralXpx + 10} y={H - PAD - 10} fontSize={12} fontWeight={700} fill="rgba(129,140,248,0.6)">EFICIENCIA MENOR</text>
+
+        {/* ── Ticks sutiles eje X (roi_pct) ── */}
         {xTicks.map((v) => {
-          const x = toX(v, xMax)
+          const score = (v / maxRoi) * 100
+          const x = scoreToX(score)
           return (
             <g key={`xt-${v}`}>
-              <line x1={x} y1={PAD.top + PH} x2={x} y2={PAD.top + PH + 4} stroke="#374151" />
-              <text x={x} y={PAD.top + PH + 14} textAnchor="middle" fontSize="9" fill="#64748b">{v}h</text>
+              <line x1={x} y1={H - PAD} x2={x} y2={H - PAD + 4} stroke="#374151" />
+              <text x={x} y={H - PAD + 14} textAnchor="middle" fontSize="8" fill="#475569">{v}%</text>
             </g>
           )
         })}
 
-        {/* Ticks eje Y (Horas ahorradas) */}
+        {/* ── Ticks sutiles eje Y (horas ahorradas) ── */}
         {yTicks.map((v) => {
-          const y = toY(v, yMax)
+          const score = (v / maxHoras) * 100
+          const y = scoreToY(score)
           return (
             <g key={`yt-${v}`}>
-              <line x1={PAD.left - 4} y1={y} x2={PAD.left} y2={y} stroke="#374151" />
-              <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="9" fill="#64748b">{v}h</text>
+              <line x1={PAD - 4} y1={y} x2={PAD} y2={y} stroke="#374151" />
+              <text x={PAD - 6} y={y + 3} textAnchor="end" fontSize="8" fill="#475569">{v}h</text>
             </g>
           )
         })}
 
-        {/* Título eje X */}
-        <text x={PAD.left + PW / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="#475569">
-          ← Proceso liviano · Horas actuales del proceso · Proceso pesado →
-        </text>
-
-        {/* Título eje Y */}
-        <text
-          x={14}
-          y={PAD.top + PH / 2}
-          textAnchor="middle"
-          fontSize="10"
-          fill="#475569"
-          transform={`rotate(-90, 14, ${PAD.top + PH / 2})`}
-        >
-          Horas ahorradas
-        </text>
-
-        {/* Umbral labels */}
-        <text x={divX + 4} y={PAD.top + 10} fontSize="8" fill="#3b82f6" opacity="0.7">{xUmbral}h</text>
-        <text x={PAD.left + 4} y={divY - 4} fontSize="8" fill="#3b82f6" opacity="0.7">{yUmbral}h</text>
-
-        {/* Burbujas */}
+        {/* ── Burbujas de proyectos ── */}
         {points.map((p, i) => {
-          const x = toX(Math.min(p.horas_proceso_actual, xMax * 0.98), xMax)
-          const y = toY(Math.min(Math.max(p.horas_ahorradas, 0), yMax * 0.98), yMax)
+          const xScore = (p.roi_pct        / maxRoi)   * 100
+          const yScore = (p.horas_ahorradas / maxHoras) * 100
+          const x = scoreToX(Math.min(xScore, 98))
+          const y = scoreToY(Math.min(Math.max(yScore, 2), 98))
           const c = ROI_QUADRANT_CONFIG[p.cuadrante_roi]
           const isHovered = hovered === i
-          const initial = p.project_title.charAt(0).toUpperCase()
 
           return (
             <motion.g
@@ -149,17 +197,38 @@ export default function ROIMatrixPlot({ points }: Props) {
               onMouseLeave={() => setHovered(null)}
               style={{ cursor: "pointer" }}
             >
-              {isHovered && <circle cx={x} cy={y} r={18} fill={c.color} opacity="0.15" />}
-              <circle cx={x} cy={y} r={12} fill={c.color} opacity={isHovered ? 0.9 : 0.75} />
-              <text x={x} y={y + 4} textAnchor="middle" fontSize="9" fill="white" fontWeight="700">{initial}</text>
+              {isHovered && (
+                <circle cx={x} cy={y} r={20}
+                  fill={c.color} opacity="0.15"
+                  style={{ filter: `drop-shadow(0 0 8px ${c.color})` }}
+                />
+              )}
+              <circle cx={x} cy={y} r={13}
+                fill={c.color} opacity={isHovered ? 0.95 : 0.8}
+                style={isHovered ? { filter: `drop-shadow(0 0 6px ${c.color})` } : undefined}
+              />
+              <text x={x} y={y + 4} textAnchor="middle" fontSize="9" fill="white" fontWeight="700">
+                {p.project_title.charAt(0).toUpperCase()}
+              </text>
 
               {isHovered && (
-                <foreignObject x={x - 95} y={y - 95} width="190" height="90">
-                  <div style={{ background: "#0f1c2e", border: `1px solid ${c.color}40`, borderRadius: 8, padding: "8px 10px" }}>
-                    <p style={{ color: "white", fontSize: 11, fontWeight: 600, marginBottom: 3 }}>{p.project_title}</p>
-                    <p style={{ color: c.color, fontSize: 10, marginBottom: 1 }}>{c.label}</p>
-                    <p style={{ color: "#64748b", fontSize: 9 }}>
-                      Proceso: {p.horas_proceso_actual}h · Ahorro: {p.horas_ahorradas.toFixed(1)}h · ROI: {p.roi_pct.toFixed(1)}%
+                <foreignObject x={x - 100} y={y - 105} width="200" height="100">
+                  <div style={{
+                    background: "#0f1c2e",
+                    border: `1px solid ${c.color}50`,
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    boxShadow: `0 4px 20px ${c.color}20`
+                  }}>
+                    <p style={{ color: "white",   fontSize: 11, fontWeight: 600, marginBottom: 3 }}>{p.project_title}</p>
+                    <p style={{ color: c.color,   fontSize: 10, marginBottom: 4 }}>{c.label} · {c.action}</p>
+                    <p style={{ color: "#94a3b8", fontSize: 9, marginBottom: 1 }}>
+                      ROI: <span style={{ color: "white" }}>{p.roi_pct.toFixed(1)}%</span>
+                      &nbsp;·&nbsp;Ahorro: <span style={{ color: "white" }}>{p.horas_ahorradas.toFixed(1)}h</span>
+                    </p>
+                    <p style={{ color: "#94a3b8", fontSize: 9 }}>
+                      Proceso: <span style={{ color: "white" }}>{p.horas_proceso_actual}h</span>
+                      &nbsp;·&nbsp;Personas: <span style={{ color: "white" }}>{p.num_personas}</span>
                     </p>
                   </div>
                 </foreignObject>
@@ -167,6 +236,13 @@ export default function ROIMatrixPlot({ points }: Props) {
             </motion.g>
           )
         })}
+
+        {/* Estado vacío */}
+        {points.length === 0 && (
+          <text x={W / 2} y={H / 2} textAnchor="middle" fontSize={13} fill="#475569">
+            No hay evaluaciones ROI registradas
+          </text>
+        )}
       </svg>
     </div>
   )
