@@ -176,7 +176,9 @@ export default function MatrixPage() {
                       <div className="min-w-0">
                         <p className="text-white text-xs font-medium truncate">{p.project_title}</p>
                         <p className={cn("text-[10px] font-semibold", config.textClass)}>{config.label}</p>
-                        <p className="text-slate-500 text-[10px] mt-0.5">ROI: {p.roi_pct.toFixed(1)}% · Payback: {p.payback_semanas.toFixed(0)}s</p>
+                        <p className="text-slate-500 text-[10px] mt-0.5">
+                          Proceso: {p.horas_proceso_actual}h · Ahorro: {p.horas_ahorradas.toFixed(1)}h · ROI:{p.roi_pct.toFixed(1)}%
+                        </p>
                       </div>
                     </div>
                   )

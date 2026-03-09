@@ -1,11 +1,11 @@
 import { motion } from "framer-motion"
-import { TrendingUp, Clock, DollarSign, Zap, CheckCircle } from "lucide-react"
+import { TrendingUp, Clock, DollarSign, Users, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ROI_QUADRANT_CONFIG } from "@/types/roi"
 import type { ROIRead } from "@/types/roi"
 
 interface Props {
-  roi:     ROIRead
+  roi: ROIRead
   onClose: () => void
 }
 
@@ -20,13 +20,6 @@ function fmtNum(n: number, decimals = 1) {
 export default function ROIResult({ roi, onClose }: Props) {
   const config = ROI_QUADRANT_CONFIG[roi.cuadrante_roi]
 
-  const paybackLabel =
-    roi.payback_semanas >= 9999
-      ? "No recuperable"
-      : roi.payback_semanas <= 52
-      ? `${fmtNum(roi.payback_semanas)} semanas`
-      : `${fmtNum(roi.payback_semanas / 52)} años`
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -37,7 +30,9 @@ export default function ROIResult({ roi, onClose }: Props) {
       <div className={cn("rounded-xl p-4 border text-center", config.bgClass, config.borderClass)}>
         <CheckCircle size={20} className={cn("mx-auto mb-2", config.textClass)} />
         <p className={cn("text-xl font-bold", config.textClass)}>{config.label}</p>
-        <p className="text-xs text-slate-400 mt-1">Recomendación: <span className="font-semibold text-white">{config.action}</span></p>
+        <p className="text-xs text-slate-400 mt-1">
+          Recomendación: <span className="font-semibold text-white">{config.action}</span>
+        </p>
       </div>
 
       {/* Métricas principales */}
@@ -56,43 +51,47 @@ export default function ROIResult({ roi, onClose }: Props) {
         <div className="bg-navy-800 rounded-xl p-3 border border-navy-700">
           <div className="flex items-center gap-1.5 mb-1">
             <Clock size={13} className="text-amber-400" />
-            <span className="text-[11px] text-slate-400">Payback</span>
+            <span className="text-[11px] text-slate-400">Horas ahorradas</span>
           </div>
-          <p className="text-base font-bold text-amber-400 leading-tight mt-1">{paybackLabel}</p>
+          <p className="text-base font-bold text-amber-400 leading-tight mt-1">
+            {fmtNum(roi.horas_ahorradas)} h
+          </p>
         </div>
 
         <div className="bg-navy-800 rounded-xl p-3 border border-navy-700">
           <div className="flex items-center gap-1.5 mb-1">
             <DollarSign size={13} className="text-cyan-400" />
-            <span className="text-[11px] text-slate-400">Ahorro anual</span>
+            <span className="text-[11px] text-slate-400">Ahorro total</span>
           </div>
-          <p className="text-lg font-bold text-cyan-400">{fmt$(roi.ahorro_anual)}</p>
+          <p className="text-lg font-bold text-cyan-400">{fmt$(roi.roi_valor_total)}</p>
         </div>
 
         <div className="bg-navy-800 rounded-xl p-3 border border-navy-700">
           <div className="flex items-center gap-1.5 mb-1">
-            <Zap size={13} className="text-indigo-400" />
-            <span className="text-[11px] text-slate-400">Horas liberadas/año</span>
+            <Users size={13} className="text-indigo-400" />
+            <span className="text-[11px] text-slate-400">Personas impactadas</span>
           </div>
-          <p className="text-lg font-bold text-indigo-400">{fmtNum(roi.horas_liberadas_anio)} h</p>
+          <p className="text-lg font-bold text-indigo-400">{roi.num_personas}</p>
         </div>
       </div>
 
-      {/* Resumen financiero */}
+      {/* Resumen de horas */}
       <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700 space-y-1.5 text-xs">
         <div className="flex justify-between text-slate-400">
-          <span>Inversión total</span>
-          <span className="text-white font-medium">{fmt$(roi.costo_total)}</span>
+          <span>Horas actuales del proceso</span>
+          <span className="text-white font-medium">{fmtNum(roi.horas_proceso_actual)} h</span>
         </div>
         <div className="flex justify-between text-slate-400">
-          <span>Ahorro anual proyectado</span>
-          <span className="text-emerald-400 font-medium">{fmt$(roi.ahorro_anual)}</span>
+          <span>Horas proyectadas</span>
+          <span className="text-white font-medium">{fmtNum(roi.horas_proyectadas)} h</span>
+        </div>
+        <div className="flex justify-between text-slate-400">
+          <span>Valor hora hombre</span>
+          <span className="text-white font-medium">{fmt$(roi.valor_hora_hombre)}</span>
         </div>
         <div className="border-t border-navy-600 pt-1.5 flex justify-between">
-          <span className="text-slate-400">Beneficio neto año 1</span>
-          <span className={cn("font-semibold", roi.ahorro_anual - roi.costo_total >= 0 ? "text-emerald-400" : "text-rose-400")}>
-            {fmt$(roi.ahorro_anual - roi.costo_total)}
-          </span>
+          <span className="text-slate-400">Ahorro total (horas × personas × valor/h)</span>
+          <span className="text-emerald-400 font-semibold">{fmt$(roi.roi_valor_total)}</span>
         </div>
       </div>
 
