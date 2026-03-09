@@ -4,13 +4,11 @@ from app.models.project import Project
 from app.models.roi import ROIEvaluation
 from app.schemas.roi import ROIParte1Input, ROIParte2Input, ROIPlotPoint
 
-# ── Umbrales de cuadrantes ────────────────────────────────────────────────────
-ROI_PCT_UMBRAL = 50.0   # >= 50% → alto ROI  (eje X normalizado)
-HORAS_UMBRAL   = 4.0    # >= 4h  → alto ahorro (eje Y normalizado)
+ROI_PCT_UMBRAL = 50.0
+HORAS_UMBRAL   = 4.0
 
 
 def _calcular_valor_hora(salario_base: float) -> dict:
-    """Mes de 30 días calendario, jornada de 8 horas."""
     return {
         "valor_quincena":    round(salario_base / 2, 2),
         "valor_dia":         round(salario_base / 30, 2),
@@ -19,38 +17,23 @@ def _calcular_valor_hora(salario_base: float) -> dict:
 
 
 def assign_roi_quadrant(roi_pct: float, horas_ahorradas: float) -> str:
-    """
-    Eje X → roi_pct          (rentabilidad %)
-    Eje Y → horas_ahorradas  (horas liberadas)
-
-    alto_impacto     → roi_pct >= 50% Y horas >= 4  → top-right  🟢 Ejecutar ya
-    proceso_pesado   → roi_pct <  50% Y horas >= 4  → top-left   🟡 Evaluar
-    eficiencia_menor → roi_pct >= 50% Y horas <  4  → bot-right  🔵 Planificar
-    bajo_impacto     → roi_pct <  50% Y horas <  4  → bot-left   🔴 Revisar
-    """
     alto_roi    = roi_pct >= ROI_PCT_UMBRAL
     ahorra_bien = horas_ahorradas >= HORAS_UMBRAL
-
-    if alto_roi and ahorra_bien:
-        return "alto_impacto"
-    if not alto_roi and ahorra_bien:
-        return "proceso_pesado"
-    if alto_roi and not ahorra_bien:
-        return "eficiencia_menor"
+    if alto_roi and ahorra_bien:      return "alto_impacto"
+    if not alto_roi and ahorra_bien:  return "proceso_pesado"
+    if alto_roi and not ahorra_bien:  return "eficiencia_menor"
     return "bajo_impacto"
 
 
 def calculate_roi(parte1: ROIParte1Input, parte2: ROIParte2Input) -> dict:
     valores    = _calcular_valor_hora(parte1.salario_base)
     valor_hora = valores["valor_hora_hombre"]
-
     horas_ahorradas = round(parte2.horas_proceso_actual - parte2.horas_proyectadas, 2)
     roi_valor       = round(horas_ahorradas * valor_hora, 2)
     roi_valor_total = round(roi_valor * parte1.num_personas, 2)
     roi_pct         = round(
         (horas_ahorradas / parte2.horas_proceso_actual) * 100, 2
     ) if parte2.horas_proceso_actual > 0 else 0.0
-
     return {
         **valores,
         "horas_ahorradas":  horas_ahorradas,
@@ -61,7 +44,6 @@ def calculate_roi(parte1: ROIParte1Input, parte2: ROIParte2Input) -> dict:
     }
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────────
 def create_roi_parte1(db: Session, project_id: int, parte1: ROIParte1Input) -> ROIEvaluation:
     valores = _calcular_valor_hora(parte1.salario_base)
     evaluation = ROIEvaluation(
@@ -85,7 +67,6 @@ def update_roi_parte2(
     parte2: ROIParte2Input,
 ) -> ROIEvaluation:
     calculated = calculate_roi(parte1, parte2)
-
     evaluation.horas_proceso_actual = parte2.horas_proceso_actual
     evaluation.horas_proyectadas    = parte2.horas_proyectadas
     evaluation.horas_ahorradas      = calculated["horas_ahorradas"]
@@ -93,7 +74,6 @@ def update_roi_parte2(
     evaluation.roi_valor_total      = calculated["roi_valor_total"]
     evaluation.roi_pct              = calculated["roi_pct"]
     evaluation.cuadrante_roi        = calculated["cuadrante_roi"]
-
     db.add(evaluation)
     db.commit()
     db.refresh(evaluation)
@@ -108,12 +88,20 @@ def get_latest_roi(db: Session, project_id: int) -> ROIEvaluation | None:
     ).first()
 
 
+# ── NUEVO: historial completo ─────────────────────────────────────────────────
+def get_roi_history(db: Session, project_id: int) -> list[ROIEvaluation]:
+    return list(db.exec(
+        select(ROIEvaluation)
+        .where(ROIEvaluation.project_id == project_id)
+        .order_by(col(ROIEvaluation.created_at).desc())
+    ).all())
+
+
 def get_roi_plot_points(db: Session, owner_id: int | None = None) -> list[ROIPlotPoint]:
     query = select(Project)
     if owner_id is not None:
         query = query.where(Project.owner_id == owner_id)
     projects = list(db.exec(query))
-
     points: list[ROIPlotPoint] = []
     for project in projects:
         latest = get_latest_roi(db, cast(int, project.id))
