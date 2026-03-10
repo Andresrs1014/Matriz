@@ -1,5 +1,6 @@
 from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
+from sqlalchemy import text
 
 from app.config import settings
 
@@ -22,6 +23,28 @@ def get_engine():
 def create_db_and_tables() -> None:
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
+
+
+def run_migrations() -> None:
+    """
+    Migraciones manuales: agrega columnas nuevas a tablas existentes sin perder datos.
+    Agregar aquí cada ALTER TABLE cuando se añada un campo al modelo.
+    SQLite ignora el error si la columna ya existe gracias al try/except.
+    """
+    engine = get_engine()
+    migrations = [
+        # Formato: (descripción, SQL)
+        ("user.deactivated_at", "ALTER TABLE user ADD COLUMN deactivated_at DATETIME"),
+    ]
+    with engine.connect() as conn:
+        for description, sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+                print(f"[migration] Aplicada: {description}")
+            except Exception:
+                # La columna ya existe — no es un error
+                pass
 
 
 def get_session():

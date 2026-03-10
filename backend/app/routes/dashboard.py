@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from typing import cast
 from sqlmodel import Session
 
 from app.core.dependencies import get_db, get_current_user
@@ -20,7 +21,7 @@ def dashboard_stats(
     """
     return get_dashboard_stats(
         db,
-        user_id=current_user.id,
+        user_id=cast(int, current_user.id),
         role=current_user.role,
     )
 
@@ -36,6 +37,6 @@ def quadrant_summary(
     """
     return get_quadrant_summary(
         db,
-        user_id=current_user.id,
+        user_id=cast(int, current_user.id),
         role=current_user.role,
     )

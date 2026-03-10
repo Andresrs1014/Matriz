@@ -1,39 +1,50 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from typing import cast
 from sqlmodel import Session
-
-from app.core.dependencies import get_db, get_current_user, require_admin, require_superadmin
+from app.core.dependencies import get_db, get_current_user, require_coordinador, require_admin, require_superadmin
 from app.core.security import create_access_token
 from app.schemas.auth import (
     RegisterRequest, TokenResponse, MeResponse,
     UserListResponse, UpdateRoleRequest, UpdateUserRequest
 )
 from app.services.auth_service import (
-    create_user, authenticate_user, get_all_users,
-    get_user_by_id, update_user_role, update_user, deactivate_user
+    create_user, authenticate_user, get_all_users, get_archived_users,
+    get_user_by_id, update_user_role, update_user,
+    deactivate_user, reactivate_user, permanent_delete_user
 )
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+def _to_me(u: User) -> MeResponse:
+    return MeResponse(
+        id=cast(int, u.id), email=u.email, full_name=u.full_name,
+        role=u.role, area=u.area, is_active=u.is_active,
+    )
+
+def _to_list(u: User) -> UserListResponse:
+    return UserListResponse(
+        id=cast(int, u.id), email=u.email, full_name=u.full_name,
+        role=u.role, area=u.area, is_active=u.is_active,
+        created_at=u.created_at.isoformat(),
+    )
+
+
 @router.post("/register", response_model=MeResponse)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(
+    payload: RegisterRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_coordinador),
+):
     user = create_user(
-        db,
-        email=str(payload.email),
+        db, email=str(payload.email),
         password=payload.password,
         full_name=payload.full_name,
         area=payload.area,
     )
-    return MeResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        area=user.area,
-        is_active=user.is_active,
-    )
+    return _to_me(user)
 
 
 @router.post("/token", response_model=TokenResponse)
@@ -51,106 +62,103 @@ def token(
 
 @router.get("/me", response_model=MeResponse)
 def me(current_user: User = Depends(get_current_user)):
-    return MeResponse(
-        id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        role=current_user.role,
-        area=current_user.area,
-        is_active=current_user.is_active,
-    )
+    return _to_me(current_user)
 
 
-# ── Endpoints de administración (solo admin+) ─────────────────────────────
+# ── Usuarios activos ──────────────────────────────────────────────────────────
 
-@router.get("/users", response_model=list[UserListResponse], tags=["Admin"])
+@router.get("/users", response_model=list[UserListResponse])
 def list_users(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin)
+    _: User = Depends(require_coordinador),
 ):
-    """Lista todos los usuarios. Solo admin y superadmin."""
-    users = get_all_users(db)
-    return [
-        UserListResponse(
-            id=u.id,
-            email=u.email,
-            full_name=u.full_name,
-            role=u.role,
-            area=u.area,
-            is_active=u.is_active,
-            created_at=u.created_at.isoformat(),
-        )
-        for u in users
-    ]
+    """Lista usuarios activos. Coordinador+."""
+    return [_to_list(u) for u in get_all_users(db)]
 
 
-@router.put("/users/{user_id}/role", response_model=MeResponse, tags=["Admin"])
+@router.put("/users/{user_id}/role", response_model=MeResponse)
 def change_user_role(
     user_id: int,
     payload: UpdateRoleRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_coordinador),
 ):
-    """Cambia el rol de un usuario. Solo superadmin."""
+    """Cambia el rol. Coordinador+."""
     user = get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
-
-    # El superadmin no puede degradarse a sí mismo
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     if user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No puedes cambiar tu propio rol."
-        )
-
-    updated = update_user_role(db, user, payload.role)
-    return MeResponse(
-        id=updated.id,
-        email=updated.email,
-        full_name=updated.full_name,
-        role=updated.role,
-        area=updated.area,
-        is_active=updated.is_active,
-    )
+        raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol.")
+    return _to_me(update_user_role(db, user, payload.role))
 
 
-@router.put("/users/{user_id}", response_model=MeResponse, tags=["Admin"])
+@router.put("/users/{user_id}", response_model=MeResponse)
 def update_user_data(
     user_id: int,
     payload: UpdateUserRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User = Depends(require_coordinador),
 ):
-    """Actualiza datos de un usuario. Solo admin+."""
+    """Actualiza datos. Coordinador+."""
     user = get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
-    data = payload.model_dump(exclude_unset=True)
-    updated = update_user(db, user, data)
-    return MeResponse(
-        id=updated.id,
-        email=updated.email,
-        full_name=updated.full_name,
-        role=updated.role,
-        area=updated.area,
-        is_active=updated.is_active,
-    )
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    return _to_me(update_user(db, user, payload.model_dump(exclude_unset=True)))
 
 
-@router.delete("/users/{user_id}", tags=["Admin"])
+@router.delete("/users/{user_id}")
 def deactivate_user_endpoint(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_superadmin),
+    current_user: User = Depends(require_coordinador),
 ):
-    """Desactiva un usuario (no lo elimina). Solo superadmin."""
+    """Desactiva (archiva) un usuario. Coordinador+."""
     user = get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     if user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No puedes desactivarte a ti mismo."
-        )
+        raise HTTPException(status_code=400, detail="No puedes desactivarte a ti mismo.")
     deactivate_user(db, user)
-    return {"ok": True, "message": f"Usuario {user.email} desactivado."}
+    return {"ok": True}
+
+
+# ── Usuarios archivados ───────────────────────────────────────────────────────
+
+@router.get("/users/archived", response_model=list[UserListResponse])
+def list_archived(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_coordinador),
+):
+    """Lista usuarios archivados (últimos 6 meses). Coordinador+."""
+    return [_to_list(u) for u in get_archived_users(db)]
+
+
+@router.post("/users/{user_id}/reactivar", response_model=MeResponse)
+def reactivar_usuario(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_coordinador),
+):
+    """Reactiva un usuario archivado. Coordinador+."""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    if user.is_active:
+        raise HTTPException(status_code=400, detail="El usuario ya está activo.")
+    return _to_me(reactivate_user(db, user))
+
+
+@router.delete("/users/{user_id}/permanent")
+def delete_permanent(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_coordinador),
+):
+    """Elimina permanentemente de la DB en cascada. Coordinador+."""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo.")
+    permanent_delete_user(db, user)
+    return {"ok": True}

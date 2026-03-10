@@ -97,7 +97,7 @@ def get_matrix_plot(
     Un punto por proyecto (evaluación más reciente).
     Admin ve todos, user ve solo los suyos.
     """
-    owner_id = None if current_user.role in ("admin", "superadmin") else current_user.id
+    owner_id = None if current_user.role in ("admin", "superadmin", "coordinador") else current_user.id
     return get_latest_evaluation_per_project(db, owner_id=owner_id)
 
 
@@ -112,7 +112,7 @@ def get_project_history(
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
-    if current_user.role not in ("admin", "superadmin") and project.owner_id != current_user.id:
+    if current_user.role not in ("admin", "superadmin", "coordinador") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
 
     evaluations = get_evaluations_for_project(

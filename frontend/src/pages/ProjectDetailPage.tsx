@@ -47,7 +47,7 @@ export default function ProjectDetailPage() {
     try {
       const [projRes, evalRes, roiRes] = await Promise.all([
         api.get<Project>(`/projects/${id}`),
-        api.get<Evaluation[]>(`/matrix/history/${id}`),
+        api.get<Evaluation[]>(`/matrix/history/${id}`).catch(() => ({ data: [] as Evaluation[] })),
         api.get<ROIRead>(`/roi/${id}`).catch(() => ({ data: null })),
       ])
       setProject(projRes.data)

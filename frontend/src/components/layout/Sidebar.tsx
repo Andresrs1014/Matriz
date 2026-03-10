@@ -1,23 +1,30 @@
 import { NavLink, useNavigate } from "react-router-dom"
-import { LayoutDashboard, FolderKanban, Target, Settings, LogOut, Zap } from "lucide-react"
+import { LayoutDashboard, FolderKanban, Target, Settings, LogOut, Zap, Users } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/authStore"
-import { canAccessSettings, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
+import { canAccessSettings, isAdmin, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
+import type { Role } from "@/lib/roles"
 
 const BASE_NAV = [
-  { to: "/",         icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/projects", icon: FolderKanban,    label: "Proyectos" },
-  { to: "/matrix",   icon: Target,          label: "Matriz"    },
+  { to: "/",         icon: LayoutDashboard, label: "Dashboard"  },
+  { to: "/projects", icon: FolderKanban,    label: "Proyectos"  },
+  { to: "/matrix",   icon: Target,          label: "Matriz"     },
 ]
 
 export default function Sidebar() {
   const { user, clearAuth } = useAuthStore()
   const navigate = useNavigate()
 
-  const navItems = canAccessSettings(user)
-    ? [...BASE_NAV, { to: "/settings", icon: Settings, label: "Configuración" }]
-    : BASE_NAV
+  const navItems = [
+    ...BASE_NAV,
+    ...(canAccessSettings(user) ? [{ to: "/settings", icon: Settings, label: "Configuración" }] : []),
+    ...(isAdmin(user)           ? [{ to: "/users",    icon: Users,    label: "Usuarios"       }] : []),
+  ]
+
+  const role      = (user?.role ?? "usuario") as Role
+  const roleLabel = ROLE_LABELS[role]
+  const roleColor = ROLE_COLORS[role]
 
   function handleLogout() {
     clearAuth()
@@ -26,7 +33,6 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden md:flex flex-col w-64 min-h-screen bg-navy-900 border-r border-navy-700 relative">
-
       <div className="laser-line-v absolute right-0 top-0 h-full opacity-60" />
 
       {/* Logo */}
@@ -84,11 +90,8 @@ export default function Sidebar() {
           <p className="text-xs text-slate-400 truncate">Conectado como</p>
           <p className="text-sm text-white font-medium truncate">{user?.full_name ?? user?.email}</p>
           <div className="flex items-center gap-2 mt-1.5">
-            <span className={cn(
-              "text-[10px] font-semibold px-2 py-0.5 rounded-full border",
-              ROLE_COLORS[user?.role ?? "user"]
-            )}>
-              {ROLE_LABELS[user?.role ?? "user"]}
+            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", roleColor)}>
+              {roleLabel}
             </span>
             {user?.area && (
               <span className="text-[10px] text-slate-500 truncate">{user.area}</span>

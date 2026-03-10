@@ -1,17 +1,15 @@
 import { useState } from "react"
-import { useNavigate, Link, useLocation } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Zap, Eye, EyeOff, LogIn, CheckCircle } from "lucide-react"
+import { Zap, Eye, EyeOff, LogIn } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
 import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const navigate   = useNavigate()
-  const location   = useLocation()
   const { setAuth } = useAuthStore()
 
-  const successMsg = (location.state as any)?.message ?? null
 
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
@@ -69,18 +67,6 @@ export default function LoginPage() {
           </div>
 
           <div className="laser-line-h mb-8 opacity-50" />
-
-          {/* Mensaje de éxito desde registro */}
-          {successMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm mb-5"
-            >
-              <CheckCircle size={15} />
-              {successMsg}
-            </motion.div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
@@ -142,14 +128,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="laser-line-h mt-6 mb-4 opacity-30" />
-
-          <p className="text-center text-sm text-slate-500">
-            ¿No tienes cuenta?{" "}
-            <Link to="/register" className="text-electric hover:text-electric-bright transition-colors font-medium">
-              Regístrate
-            </Link>
-          </p>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6">
