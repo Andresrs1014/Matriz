@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import SQLModel, Field
 
-# Roles válidos: superadmin | admin | coordinador | usuario
 class User(SQLModel, table=True):
     id:               Optional[int] = Field(default=None, primary_key=True)
     email:            str           = Field(index=True, nullable=False, sa_column_kwargs={"unique": True})
@@ -14,3 +13,4 @@ class User(SQLModel, table=True):
     created_at:       datetime      = Field(
         default_factory=lambda: datetime.now(timezone.utc), nullable=False
     )
+    deactivated_at:   datetime | None = Field(default=None)   # ← NUEVO

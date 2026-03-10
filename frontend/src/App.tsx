@@ -5,7 +5,6 @@ import { canAccessSettings } from "@/lib/roles"
 import AppLayout from "@/components/layout/AppLayout"
 
 const LoginPage         = React.lazy(() => import("@/pages/LoginPage"))
-const RegisterPage      = React.lazy(() => import("@/pages/RegisterPage"))
 const DashboardPage     = React.lazy(() => import("@/pages/DashboardPage"))
 const ProjectsPage      = React.lazy(() => import("@/pages/ProjectsPage"))
 const ProjectDetailPage = React.lazy(() => import("@/pages/ProjectDetailPage"))
@@ -38,7 +37,6 @@ export default function App() {
       <Routes>
         {/* Rutas públicas */}
         <Route path="/login"    element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
 
         {/* Rutas protegidas — todas bajo AppLayout */}
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -48,6 +46,14 @@ export default function App() {
           <Route                      path="/matrix"        element={<MatrixPage />} />
           <Route
             path="/settings"
+            element={
+              <AdminRoute>
+                <SettingsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/users"
             element={
               <AdminRoute>
                 <SettingsPage />

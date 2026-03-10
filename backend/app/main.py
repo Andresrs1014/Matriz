@@ -7,7 +7,7 @@ import app.models  # noqa: F401
 
 from app.config import settings
 from app.core.ws_manager import ws_manager
-from app.database import create_db_and_tables, get_engine
+from app.database import create_db_and_tables, run_migrations, get_engine
 from app.routes.auth      import router as auth_router
 from app.routes.projects  import router as projects_router
 from app.routes.matrix    import router as matrix_router
@@ -22,6 +22,7 @@ from app.routes.comments import router as comments_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    run_migrations()
     engine = get_engine()
     with Session(engine) as db:
         seed_matrix_questions(db)
