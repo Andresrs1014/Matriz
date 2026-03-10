@@ -1,21 +1,16 @@
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
-
+from sqlmodel import Session, select, col
 from app.core.security import hash_password, verify_password
 from app.models.user import User
-
 
 def get_user_by_email(db: Session, email: str) -> User | None:
     return db.exec(select(User).where(User.email == email)).first()
 
-
 def get_user_by_id(db: Session, user_id: int) -> User | None:
     return db.get(User, user_id)
 
-
 def get_all_users(db: Session) -> list[User]:
-    return list(db.exec(select(User).order_by(User.created_at)))
-
+    return list(db.exec(select(User).order_by(col(User.created_at))))
 
 def create_user(
     db: Session,
@@ -23,7 +18,7 @@ def create_user(
     password: str,
     full_name: str | None = None,
     area: str | None = None,
-    role: str = "user",
+    role: str = "usuario",          # Fix Bug 1 — era "user"
 ) -> User:
     existing = get_user_by_email(db, email)
     if existing:
@@ -42,7 +37,6 @@ def create_user(
     db.commit()
     db.refresh(user)
     return user
-
 
 def authenticate_user(db: Session, email: str, password: str) -> User:
     user = get_user_by_email(db, email)
@@ -63,9 +57,8 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
         )
     return user
 
-
 def update_user_role(db: Session, user: User, new_role: str) -> User:
-    VALID_ROLES = ("superadmin", "admin", "user")
+    VALID_ROLES = ("superadmin", "admin", "coordinador", "usuario")  # Fix Bug 2
     if new_role not in VALID_ROLES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -77,7 +70,6 @@ def update_user_role(db: Session, user: User, new_role: str) -> User:
     db.refresh(user)
     return user
 
-
 def update_user(db: Session, user: User, data: dict) -> User:
     for k, v in data.items():
         if v is not None:
@@ -86,7 +78,6 @@ def update_user(db: Session, user: User, data: dict) -> User:
     db.commit()
     db.refresh(user)
     return user
-
 
 def deactivate_user(db: Session, user: User) -> User:
     user.is_active = False
