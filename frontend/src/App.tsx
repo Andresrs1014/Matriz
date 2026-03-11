@@ -52,14 +52,6 @@ export default function App() {
               </AdminRoute>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <AdminRoute>
-                <SettingsPage />
-              </AdminRoute>
-            }
-          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
