@@ -1,9 +1,9 @@
 import { NavLink, useNavigate } from "react-router-dom"
-import { LayoutDashboard, FolderKanban, Target, Settings, LogOut, Zap, Users } from "lucide-react"
+import { LayoutDashboard, FolderKanban, Target, Settings, LogOut, Zap } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/authStore"
-import { canAccessSettings, isAdmin, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
+import { canAccessSettings, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
 import type { Role } from "@/lib/roles"
 
 const BASE_NAV = [
@@ -19,7 +19,6 @@ export default function Sidebar() {
   const navItems = [
     ...BASE_NAV,
     ...(canAccessSettings(user) ? [{ to: "/settings", icon: Settings, label: "Configuración" }] : []),
-    ...(isAdmin(user)           ? [{ to: "/users",    icon: Users,    label: "Usuarios"       }] : []),
   ]
 
   const role      = (user?.role ?? "usuario") as Role

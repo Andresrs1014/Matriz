@@ -9,7 +9,7 @@ from app.schemas.project import ProjectCreate, ProjectRead, AprobacionFinalInput
 from app.services.project_service import (
     get_project_any, create_project, delete_project,
     aprobar_proyecto, iniciar_evaluacion, marcar_evaluado, aprobacion_final,
-    list_all_projects,
+    list_all_projects, escalar_proyecto,           # ← agregar escalar_proyecto
 )
 from app.services.comment_service import create_status_comment
 from app.services.roi_service import _calcular_valor_hora
@@ -110,13 +110,27 @@ def delete_project_endpoint(
 
 # ── Flujo de aprobación ───────────────────────────────────────────────────────
 
+@router.post("/{project_id}/escalar", response_model=ProjectRead)
+def escalar(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_coordinador),
+):
+    """Paso 1 — Coordinador revisa el OKR y lo eleva al admin."""
+    project = get_project_any(db, project_id)
+    project = escalar_proyecto(db, project, current_user)
+    create_status_comment(db, project_id, current_user,
+        f"Proyecto escalado por {current_user.full_name or current_user.email}. Pendiente revisión del admin.")
+    return _to_read(project)
+
+
 @router.post("/{project_id}/aprobar", response_model=ProjectRead)
 def aprobar(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Paso 1 — Admin aprueba el proyecto."""
+    """Paso 2 — Admin aprueba el proyecto."""
     project = get_project_any(db, project_id)
     project = aprobar_proyecto(db, project, current_user)
     create_status_comment(db, project_id, current_user,
@@ -130,7 +144,7 @@ def iniciar_eval(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Paso 2 — Admin genera el paquete de preguntas y lo manda al coordinador."""
+    """Paso 3 — Admin genera paquete de preguntas."""
     project = get_project_any(db, project_id)
     project = iniciar_evaluacion(db, project)
     create_status_comment(db, project_id, current_user,
@@ -144,7 +158,7 @@ def marcar_eval(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_coordinador),
 ):
-    """Paso 3 — Coordinador completa la evaluación operacional."""
+    """Paso 4 — Coordinador completa la evaluación operacional."""
     project = get_project_any(db, project_id)
     project = marcar_evaluado(db, project)
     create_status_comment(db, project_id, current_user,
@@ -159,31 +173,24 @@ def aprobacion_final_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """
-    Paso 4 — Admin da aprobación final.
-    Recibe encuesta (salario, cargo) → crea ROI Parte 1 automáticamente.
-    """
+    """Paso 5 — Admin da aprobación final + crea ROI Parte 1."""
     project = get_project_any(db, project_id)
     project = aprobacion_final(db, project, current_user)
-
-    # Crear ROI Parte 1 automáticamente con los datos de la encuesta
     valores = _calcular_valor_hora(payload.salario_base)
     roi = ROIEvaluation(
-        project_id         = project_id,
-        cargo              = payload.cargo,
-        sede               = payload.sede or "No especificada",
-        num_personas       = payload.num_personas,
-        salario_base       = payload.salario_base,
-        valor_quincena     = valores["valor_quincena"],
-        valor_dia          = valores["valor_dia"],
-        valor_hora_hombre  = valores["valor_hora_hombre"],
+        project_id        = project_id,
+        cargo             = payload.cargo,
+        sede              = payload.sede or "No especificada",
+        num_personas      = payload.num_personas,
+        salario_base      = payload.salario_base,
+        valor_quincena    = valores["valor_quincena"],
+        valor_dia         = valores["valor_dia"],
+        valor_hora_hombre = valores["valor_hora_hombre"],
     )
     db.add(roi)
     db.commit()
-
     obs = payload.observacion or "Sin observaciones."
     create_status_comment(db, project_id, current_user,
         f"Aprobacion final por {current_user.full_name or current_user.email}. "
         f"Cargo: {payload.cargo} | Salario base registrado. {obs}")
-
     return _to_read(project)
