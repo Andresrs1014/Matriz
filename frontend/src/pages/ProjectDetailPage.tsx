@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ArrowLeft, Calendar, ClipboardList,
-  TrendingUp, Zap, Target, Clock, RotateCcw, DollarSign
+  TrendingUp, Zap, Target, Clock, RotateCcw, DollarSign, MessageCircle
 } from "lucide-react"
 import api from "@/lib/api"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
@@ -13,6 +13,7 @@ import type { Project } from "@/types/project"
 import type { ROIRead } from "@/types/roi"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import ROIWizard        from "@/components/roi/ROIWizard"
+import ProjectChat      from "@/components/chat/ProjectChat"
 
 interface Evaluation {
   id:           number
@@ -291,6 +292,15 @@ export default function ProjectDetailPage() {
             </AnimatePresence>
           </div>
         )}
+      </div>
+
+      {/* Canal de comunicación */}
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+          <MessageCircle className="w-4 h-4 text-electric" />
+          Canal de comunicación
+        </h3>
+        <ProjectChat projectId={project.id} ownerId={project.owner_id} />
       </div>
 
       {/* Wizard de evaluación */}
