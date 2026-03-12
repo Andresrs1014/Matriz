@@ -1,11 +1,13 @@
+# backend/app/routes/roi.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from app.core.dependencies import get_db, get_current_user
+from app.core.dependencies import get_db, get_current_user, require_admin, require_superadmin
 from app.models.user import User
 from app.schemas.roi import ROIParte1Input, ROIParte2Input, ROIRead, ROIPlotPoint, SEDES
 from app.services.roi_service import (
-    create_roi_parte1, update_roi_parte2, get_latest_roi, get_roi_plot_points
+    create_roi_parte1, update_roi_parte2,
+    get_latest_roi, get_roi_plot_points, get_roi_history,
 )
 
 router = APIRouter(prefix="/roi", tags=["roi"])
@@ -13,16 +15,17 @@ router = APIRouter(prefix="/roi", tags=["roi"])
 
 @router.get("/sedes", response_model=list[str])
 def get_sedes():
-    """Retorna las sedes disponibles para el formulario."""
     return SEDES
 
 
 @router.get("/plot/all", response_model=list[ROIPlotPoint])
 def get_roi_plot(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Todos los proyectos con ROI completo para pintar la matriz."""
+    """usuario NO puede ver — coordinador, admin, superadmin sí."""
+    if current_user.role == "usuario":
+        raise HTTPException(status_code=403, detail="Sin acceso al ROI calculado.")
     return get_roi_plot_points(db)
 
 
@@ -31,11 +34,14 @@ def submit_parte1(
     project_id: int,
     data: ROIParte1Input,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(require_superadmin),   # solo superadmin
 ):
-    """Parte 1 — la llena el jefe. Guarda datos económicos y calcula valor hora hombre."""
+    """Parte 1 — Solo el SUPERADMIN registra el salario base."""
     if data.sede not in SEDES:
         raise HTTPException(status_code=422, detail=f"Sede inválida. Opciones: {SEDES}")
+    existing = get_latest_roi(db, project_id)
+    if existing and existing.horas_proceso_actual == 0.0:
+        raise HTTPException(status_code=400, detail="El salario ya fue registrado para este proyecto.")
     return create_roi_parte1(db, project_id, data)
 
 
@@ -44,21 +50,28 @@ def submit_parte2(
     project_id: int,
     data: ROIParte2Input,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),        # solo admin
 ):
-    """Parte 2 — la llena el analista. Recalcula ROI con horas proyectadas."""
+    """
+    Parte 2 — Solo el ADMIN completa los datos operacionales.
+    num_personas se toma del registro existente (lo guardó el superadmin en parte1).
+    """
     existing = get_latest_roi(db, project_id)
     if not existing:
-        raise HTTPException(status_code=404, detail="Primero complete la Parte 1 del ROI")
+        raise HTTPException(
+            status_code=404,
+            detail="Primero el superadmin debe completar la Parte 1 del ROI."
+        )
+    # ← CORREGIDO: horas_proyectadas (nombre real en schema), num_personas viene de parte1
     if data.horas_proyectadas >= data.horas_proceso_actual:
         raise HTTPException(
             status_code=422,
-            detail="Las horas proyectadas deben ser menores a las actuales"
+            detail="Las horas proyectadas deben ser menores a las horas actuales del proceso."
         )
     parte1 = ROIParte1Input(
         cargo=existing.cargo,
         sede=existing.sede,
-        num_personas=existing.num_personas,
+        num_personas=existing.num_personas,     # ← CORREGIDO: viene del registro existente
         salario_base=existing.salario_base,
     )
     return update_roi_parte2(db, existing, parte1, data)
@@ -68,17 +81,20 @@ def submit_parte2(
 def get_roi(
     project_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    """Última evaluación ROI de un proyecto. Devuelve null si no tiene."""
+    """usuario NO puede ver — coordinador, admin, superadmin sí."""
+    if current_user.role == "usuario":
+        raise HTTPException(status_code=403, detail="Sin acceso al ROI calculado.")
     return get_latest_roi(db, project_id)
+
 
 @router.get("/history/{project_id}", response_model=list[ROIRead])
 def get_history(
     project_id: int,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    from app.services.roi_service import get_roi_history
+    if current_user.role == "usuario":
+        raise HTTPException(status_code=403, detail="Sin acceso al historial ROI.")
     return get_roi_history(db, project_id)
-

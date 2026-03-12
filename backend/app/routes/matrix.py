@@ -1,23 +1,19 @@
+# backend/app/routes/matrix.py
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import cast
 from sqlmodel import Session
 
-from app.core.dependencies import get_db, get_current_user
+from app.core.dependencies import get_db, get_current_user, require_admin
 from app.core.ws_manager import ws_manager
 from app.models.user import User
 from app.models.project import Project
 from app.schemas.matrix import (
-    CategoryRead,
-    QuestionRead,
-    EvaluationSubmit,
-    EvaluationRead,
-    MatrixPlotPoint,
+    CategoryRead, QuestionRead,
+    EvaluationSubmit, EvaluationRead, MatrixPlotPoint,
 )
 from app.services.matrix_service import (
-    get_active_categories,
-    get_active_questions,
-    create_evaluation,
-    get_evaluations_for_project,
+    get_active_categories, get_active_questions,
+    create_evaluation, get_evaluations_for_project,
     get_latest_evaluation_per_project,
 )
 
@@ -29,7 +25,6 @@ def list_categories(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Retorna las categorías de evaluación activas."""
     return get_active_categories(db)
 
 
@@ -39,7 +34,6 @@ def list_questions(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Retorna las preguntas activas. Si se pasa category_id, filtra por esa categoría."""
     return get_active_questions(db, category_id=category_id)
 
 
@@ -48,12 +42,11 @@ async def evaluate_project(
     project_id: int,
     payload: EvaluationSubmit,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),   # ← CORREGIDO: solo admin+
 ):
     """
-    Registra una nueva evaluación para el proyecto indicado.
-    Calcula impact_score, effort_score y cuadrante automáticamente.
-    Emite evento WebSocket a todos los clientes conectados.
+    Registra evaluación impacto/esfuerzo del proyecto.
+    Solo admin y superadmin pueden evaluar — el flujo lo llama en Paso 3.
     """
     assert current_user.id is not None
     evaluation = create_evaluation(
@@ -63,18 +56,16 @@ async def evaluate_project(
         payload=payload,
     )
     assert evaluation.id is not None
-
     await ws_manager.broadcast(
         event_type="evaluation_created",
         payload={
-            "project_id":    project_id,
-            "impact_score":  evaluation.impact_score,
-            "effort_score":  evaluation.effort_score,
-            "quadrant":      evaluation.quadrant,
+            "project_id": project_id,
+            "impact_score": evaluation.impact_score,
+            "effort_score": evaluation.effort_score,
+            "quadrant": evaluation.quadrant,
             "evaluation_id": evaluation.id,
         },
     )
-
     return EvaluationRead(
         id=evaluation.id,
         project_id=evaluation.project_id,
@@ -93,11 +84,15 @@ def get_matrix_plot(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna los puntos para renderizar la matriz cuadrante.
-    Un punto por proyecto (evaluación más reciente).
-    Admin ve todos, user ve solo los suyos.
+    Puntos para la matriz cuadrante.
+    - usuario: solo ve sus propios proyectos (sin ROI)
+    - coordinador, admin, superadmin: ven todos
     """
-    owner_id = None if current_user.role in ("admin", "superadmin", "coordinador") else current_user.id
+    owner_id = (
+        None
+        if current_user.role in ("admin", "superadmin", "coordinador")
+        else current_user.id
+    )
     return get_latest_evaluation_per_project(db, owner_id=owner_id)
 
 
@@ -107,18 +102,16 @@ def get_project_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Historial completo de re-evaluaciones de un proyecto (más reciente primero)."""
-    # Verificar acceso
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
-    if current_user.role not in ("admin", "superadmin", "coordinador") and project.owner_id != current_user.id:
+    if (
+        current_user.role not in ("admin", "superadmin", "coordinador")
+        and project.owner_id != current_user.id
+    ):
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
-
     evaluations = get_evaluations_for_project(
-        db,
-        project_id=project_id,
-        owner_id=project.owner_id,
+        db, project_id=project_id, owner_id=project.owner_id
     )
     return [
         EvaluationRead(

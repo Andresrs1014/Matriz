@@ -1,11 +1,13 @@
+# backend/app/services/roi_service.py
 from typing import cast
 from sqlmodel import Session, select, col
+
 from app.models.project import Project
 from app.models.roi import ROIEvaluation
 from app.schemas.roi import ROIParte1Input, ROIParte2Input, ROIPlotPoint
 
 ROI_PCT_UMBRAL = 50.0
-HORAS_UMBRAL   = 4.0
+HORAS_UMBRAL = 4.0
 
 
 def _calcular_valor_hora(salario_base: float) -> dict:
@@ -26,21 +28,28 @@ def assign_roi_quadrant(roi_pct: float, horas_ahorradas: float) -> str:
 
 
 def calculate_roi(parte1: ROIParte1Input, parte2: ROIParte2Input) -> dict:
-    valores    = _calcular_valor_hora(parte1.salario_base)
+    valores = _calcular_valor_hora(parte1.salario_base)
     valor_hora = valores["valor_hora_hombre"]
-    horas_ahorradas = round(parte2.horas_proceso_actual - parte2.horas_proyectadas, 2)
-    roi_valor       = round(horas_ahorradas * valor_hora, 2)
-    roi_valor_total = round(roi_valor * parte1.num_personas, 2)
-    roi_pct         = round(
+
+    # ← CORREGIDO: usa horas_proyectadas (nombre real en ROIParte2Input)
+    horas_ahorradas      = round(parte2.horas_proceso_actual - parte2.horas_proyectadas, 2)
+    ahorro_horas_hombre  = round(horas_ahorradas * parte1.num_personas, 2)
+    valor_ahorro         = round(ahorro_horas_hombre * valor_hora, 2)
+    roi_valor            = round(horas_ahorradas * valor_hora, 2)
+    roi_valor_total      = round(valor_ahorro, 2)
+    roi_pct              = round(
         (horas_ahorradas / parte2.horas_proceso_actual) * 100, 2
     ) if parte2.horas_proceso_actual > 0 else 0.0
+
     return {
         **valores,
-        "horas_ahorradas":  horas_ahorradas,
-        "roi_valor":        roi_valor,
-        "roi_valor_total":  roi_valor_total,
-        "roi_pct":          roi_pct,
-        "cuadrante_roi":    assign_roi_quadrant(roi_pct, horas_ahorradas),
+        "horas_ahorradas":     horas_ahorradas,
+        "ahorro_horas_hombre": ahorro_horas_hombre,
+        "valor_ahorro":        valor_ahorro,
+        "roi_valor":           roi_valor,
+        "roi_valor_total":     roi_valor_total,
+        "roi_pct":             roi_pct,
+        "cuadrante_roi":       assign_roi_quadrant(roi_pct, horas_ahorradas),
     }
 
 
@@ -67,13 +76,19 @@ def update_roi_parte2(
     parte2: ROIParte2Input,
 ) -> ROIEvaluation:
     calculated = calculate_roi(parte1, parte2)
+
+    evaluation.num_personas         = parte1.num_personas
     evaluation.horas_proceso_actual = parte2.horas_proceso_actual
-    evaluation.horas_proyectadas    = parte2.horas_proyectadas
+    # ← CORREGIDO: asigna horas_proyectadas al campo del modelo
+    evaluation.horas_proceso_nuevo  = parte2.horas_proyectadas
     evaluation.horas_ahorradas      = calculated["horas_ahorradas"]
+    evaluation.ahorro_horas_hombre  = calculated["ahorro_horas_hombre"]
+    evaluation.valor_ahorro         = calculated["valor_ahorro"]
     evaluation.roi_valor            = calculated["roi_valor"]
     evaluation.roi_valor_total      = calculated["roi_valor_total"]
     evaluation.roi_pct              = calculated["roi_pct"]
     evaluation.cuadrante_roi        = calculated["cuadrante_roi"]
+
     db.add(evaluation)
     db.commit()
     db.refresh(evaluation)
@@ -88,7 +103,6 @@ def get_latest_roi(db: Session, project_id: int) -> ROIEvaluation | None:
     ).first()
 
 
-# ── NUEVO: historial completo ─────────────────────────────────────────────────
 def get_roi_history(db: Session, project_id: int) -> list[ROIEvaluation]:
     return list(db.exec(
         select(ROIEvaluation)

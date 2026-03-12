@@ -30,3 +30,36 @@ class AprobacionFinalInput(BaseModel):
     num_personas:  int = 1
     sede:          str | None = None
     observacion:   str | None = None
+
+
+# Superadmin aprueba y asigna preguntas al mismo tiempo
+class SuperaprobacionInput(BaseModel):
+    question_ids: list[int] = []      # IDs de MatrixQuestion existentes
+    custom_questions: list[str] = []  # textos libres de preguntas nuevas
+
+
+# Superadmin provee el salario (privado, solo para calcular ROI)
+class SalarioInput(BaseModel):
+    salario_base: float
+    cargo: str
+    sede: str | None = None
+
+
+# Admin llena los datos operacionales del ROI
+class DatosOperacionalesInput(BaseModel):
+    num_personas: int
+    horas_proceso_actual: float
+    horas_proceso_nuevo: float
+    observacion: str | None = None
+
+
+# Schema para leer una pregunta asignada al proyecto
+class ProjectQuestionRead(BaseModel):
+    id: int
+    project_id: int
+    question_text: str
+    source_question_id: int | None
+    created_by: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

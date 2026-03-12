@@ -1,8 +1,9 @@
 import React, { Suspense } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
 import { useAuthStore } from "@/store/authStore"
-import { canAccessSettings } from "@/lib/roles"
+import { canAccessSettings, type Role } from "@/lib/roles"
 import AppLayout from "@/components/layout/AppLayout"
+import UserDashboardPage from "@/pages/UserDashboardPage"
 
 const LoginPage         = React.lazy(() => import("@/pages/LoginPage"))
 const DashboardPage     = React.lazy(() => import("@/pages/DashboardPage"))
@@ -31,6 +32,13 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function RequireRole({ children, roles }: { children: React.ReactNode; roles: Role[] }) {
+  const user = useAuthStore((s) => s.user)
+  if (!user) return <Navigate to="/login" replace />
+  if (!roles.includes(user.role as Role)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 export default function App() {
   return (
     <Suspense fallback={<Spinner />}>
@@ -50,6 +58,14 @@ export default function App() {
               <AdminRoute>
                 <SettingsPage />
               </AdminRoute>
+            }
+          />
+          <Route
+            path="/my-dashboard"
+            element={
+              <RequireRole roles={["usuario"]}>
+                <UserDashboardPage />
+              </RequireRole>
             }
           />
         </Route>
