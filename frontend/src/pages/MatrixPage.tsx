@@ -15,6 +15,8 @@ import { ROI_QUADRANT_CONFIG, type ROICuadranteKey } from "@/types/roi"
 import type { ROIPlotPoint } from "@/types/roi"
 import type { MatrixPlotPoint } from "@/types/matrix"
 import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/store/authStore"
+import { isAdmin, isCoordinador } from "@/lib/roles"
 
 type TabKey = "operacional" | "roi"
 
@@ -27,24 +29,38 @@ function fmtNum(n: number, d = 1) {
   return new Intl.NumberFormat("es-CO", { maximumFractionDigits: d }).format(n)
 }
 
-const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+const ALL_TABS: { key: TabKey; label: string; icon: React.ReactElement }[] = [
   { key: "operacional", label: "Operacional", icon: <Target size={13} /> },
   { key: "roi",         label: "ROI",         icon: <DollarSign size={13} /> },
 ]
 
+
 const PANEL_WIDTH = 288   // px — ancho fijo del panel lateral
 
 export default function MatrixPage() {
+  const { user } = useAuthStore()
+  const canSeeROI = isAdmin(user) || isCoordinador(user)
+  const availableTabs = canSeeROI ? ALL_TABS : ALL_TABS.filter((t) => t.key === "operacional")
+
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = (searchParams.get("tab") as TabKey) ?? "operacional"
+  const safeInitialTab: TabKey = !canSeeROI && initialTab === "roi" ? "operacional" : initialTab
 
-  const [tab,         setTab]         = useState<TabKey>(initialTab)
-  const [filter,      setFilter]      = useState<FilterType>("all")
-  const [selOp,       setSelOp]       = useState<MatrixPlotPoint | null>(null)   // seleccionado operacional
-  const [selRoi,      setSelRoi]      = useState<ROIPlotPoint    | null>(null)   // seleccionado ROI
+  const [tab,    setTab]    = useState<TabKey>(safeInitialTab)
+  const [filter, setFilter] = useState<FilterType>("all")
+  const [selOp,  setSelOp]  = useState<MatrixPlotPoint | null>(null)
+  const [selRoi, setSelRoi] = useState<ROIPlotPoint    | null>(null)
 
   const { plotPoints,    loading: loadingOp,  fetchPlotPoints } = useMatrix()
   const { roiPlotPoints, loading: loadingROI, fetchROIPlot }    = useROIPlot()
+
+  // Guard: si el usuario pierde acceso a ROI, redirige a operacional
+  useEffect(() => {
+    if (!canSeeROI && tab === "roi") {
+      setTab("operacional")
+      setSearchParams({ tab: "operacional" })
+    }
+  }, [canSeeROI]) // eslint-disable-line
 
   function handleTabChange(t: TabKey) {
     setTab(t)
@@ -54,7 +70,7 @@ export default function MatrixPage() {
   }
 
   useEffect(() => {
-    if (tab === "roi" && roiPlotPoints.length === 0) fetchROIPlot()
+    if (tab === "roi" && canSeeROI && roiPlotPoints.length === 0) fetchROIPlot()
   }, [tab]) // eslint-disable-line
 
   const opCounts = plotPoints.reduce<Record<string, number>>((acc, p) => {
@@ -70,7 +86,7 @@ export default function MatrixPage() {
       {/* ── Header: Tabs + filtros + refresh ── */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex gap-1 bg-navy-900 border border-navy-700 rounded-xl p-1">
-          {TABS.map((t) => (
+          {availableTabs.map((t) => (
             <button key={t.key} onClick={() => handleTabChange(t.key)}
               className={cn(
                 "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all",
@@ -183,7 +199,7 @@ export default function MatrixPage() {
       {/* ══════════════════════════════════════════════════════
           TAB ROI
       ══════════════════════════════════════════════════════ */}
-      {tab === "roi" && (
+      {tab === "roi" && canSeeROI && (
         <>
           {/* Matriz ROI + panel lateral */}
           <div className="flex gap-4 items-start">
