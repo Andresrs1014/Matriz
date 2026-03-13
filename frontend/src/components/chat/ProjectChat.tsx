@@ -56,7 +56,7 @@ export default function ProjectChat({ projectId }: Props) {
 
   const fetchComments = useCallback(async () => {
     try {
-      const { data } = await api.get<Comment[]>(`/comments/${projectId}`)
+      const { data } = await api.get<Comment[]>(`/projects/${projectId}/comments`)
       // Usuario solo ve comentarios donde él participó + feedback que le enviaron
       if (esUsuario) {
         setComments(data.filter((c) =>
@@ -88,7 +88,7 @@ export default function ProjectChat({ projectId }: Props) {
     if (!message.trim() || sending) return
     setSending(true)
     try {
-      await api.post(`/comments/${projectId}`, {
+      await api.post(`/projects/${projectId}/comments`, {
         message: message.trim(),
         tipo: esUsuario ? "comentario" : tipo,
       })
