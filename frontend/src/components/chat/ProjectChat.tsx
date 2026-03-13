@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react"
+// frontend/src/components/chat/ProjectChat.tsx
+import { useEffect, useRef, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Send, MessageCircle, Info } from "lucide-react"
+import { Send, Info, Loader2 } from "lucide-react"
 import { useAuthStore } from "@/store/authStore"
+import { isAdmin, isSuperAdmin, isCoordinador } from "@/lib/roles"
 import api from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -18,23 +20,29 @@ interface Comment {
 
 interface Props {
   projectId: number
-  ownerId: number
 }
 
-const TIPO_CONFIG: Record<string, { label: string; class: string }> = {
-  comentario:     { label: "Comentario",      class: "bg-slate-700/40 border-slate-600/30" },
-  feedback:       { label: "Feedback",        class: "bg-blue-500/10 border-blue-500/20" },
-  cambio_estado:  { label: "Cambio de estado",class: "bg-amber-500/10 border-amber-500/20" },
-  aprobacion:     { label: "Aprobación",      class: "bg-emerald-500/10 border-emerald-500/20" },
+const TIPO_COLORS: Record<string, string> = {
+  comentario:    "border-slate-700/50 bg-slate-800/40",
+  feedback:      "border-blue-500/20 bg-blue-500/5",
+  cambio_estado: "border-amber-500/20 bg-amber-500/5",
+  aprobacion:    "border-emerald-500/20 bg-emerald-500/5",
 }
 
-const ROLE_COLOR: Record<string, string> = {
-  admin:        "text-purple-400",
-  coordinador:  "text-electric",
-  usuario:      "text-slate-300",
+const ROLE_COLORS: Record<string, string> = {
+  superadmin:  "text-amber-400",
+  admin:       "text-electric",
+  coordinador: "text-blue-400",
+  usuario:     "text-slate-300",
 }
 
-export default function ProjectChat({ projectId, ownerId }: Props) {
+const TIPOS_DISPONIBLES = [
+  { value: "comentario",    label: "Comentario" },
+  { value: "feedback",      label: "Feedback" },
+  { value: "cambio_estado", label: "Estado" },
+]
+
+export default function ProjectChat({ projectId }: Props) {
   const { user } = useAuthStore()
   const [comments, setComments] = useState<Comment[]>([])
   const [message, setMessage] = useState("")
@@ -43,16 +51,19 @@ export default function ProjectChat({ projectId, ownerId }: Props) {
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const isUsuario = user?.role === "usuario"
-  const isOwner = user?.id === ownerId
+  const esUsuario = user?.role === "usuario"
+  const puedeElegiTipo = isAdmin(user) || isSuperAdmin(user) || isCoordinador(user)
 
-  async function fetchComments() {
+  const fetchComments = useCallback(async () => {
     try {
-      const res = await api.get(`/comments/${projectId}`)
-      // El usuario solo ve sus propios comentarios + los que le hablan
-      const data: Comment[] = res.data
-      if (isUsuario) {
-        setComments(data.filter(c => c.author_id === user?.id || c.tipo === "feedback"))
+      const { data } = await api.get<Comment[]>(`/comments/${projectId}`)
+      // Usuario solo ve comentarios donde él participó + feedback que le enviaron
+      if (esUsuario) {
+        setComments(data.filter((c) =>
+          c.author_id === user?.id ||
+          c.tipo === "feedback" ||
+          c.tipo === "cambio_estado"
+        ))
       } else {
         setComments(data)
       }
@@ -61,13 +72,13 @@ export default function ProjectChat({ projectId, ownerId }: Props) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId, esUsuario, user?.id])
 
   useEffect(() => {
     fetchComments()
-    const interval = setInterval(fetchComments, 5000)
+    const interval = setInterval(fetchComments, 6000)
     return () => clearInterval(interval)
-  }, [projectId])
+  }, [fetchComments])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -77,7 +88,10 @@ export default function ProjectChat({ projectId, ownerId }: Props) {
     if (!message.trim() || sending) return
     setSending(true)
     try {
-      await api.post(`/comments/${projectId}`, { message: message.trim(), tipo })
+      await api.post(`/comments/${projectId}`, {
+        message: message.trim(),
+        tipo: esUsuario ? "comentario" : tipo,
+      })
       setMessage("")
       await fetchComments()
     } finally {
@@ -92,66 +106,59 @@ export default function ProjectChat({ projectId, ownerId }: Props) {
     }
   }
 
-  const tiposDisponibles = isUsuario
-    ? ["comentario"]
-    : ["comentario", "feedback", "cambio_estado", "aprobacion"]
-
   return (
-    <div className="flex flex-col h-full bg-slate-900/50 border border-slate-700/50 rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/50 bg-slate-800/40">
-        <MessageCircle className="w-4 h-4 text-electric" />
-        <span className="text-sm font-medium text-slate-200">Canal de comunicación</span>
-        {isUsuario && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-slate-500">
-            <Info className="w-3 h-3" /> Solo ves tu hilo
-          </span>
-        )}
-      </div>
+    <div className="flex flex-col h-full">
+      {/* Aviso usuario */}
+      {esUsuario && (
+        <div className="flex items-center gap-1.5 px-4 py-2 bg-slate-800/60 border-b border-slate-700/50 text-xs text-slate-500">
+          <Info className="w-3 h-3 shrink-0" />
+          Solo ves los mensajes relevantes para tu proyecto
+        </div>
+      )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[200px] max-h-[420px]">
+      {/* Mensajes */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
         {loading ? (
           <div className="flex justify-center pt-8">
-            <div className="w-5 h-5 border-2 border-electric/30 border-t-electric rounded-full animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
           </div>
         ) : comments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full py-10 gap-2 text-slate-500">
-            <MessageCircle className="w-8 h-8 opacity-30" />
-            <span className="text-sm">Sin mensajes aún</span>
+          <div className="flex flex-col items-center justify-center h-full py-8 gap-2 text-slate-600">
+            <p className="text-xs">Sin mensajes aún</p>
           </div>
         ) : (
           <AnimatePresence initial={false}>
             {comments.map((c) => {
-              const tipoConf = TIPO_CONFIG[c.tipo] ?? TIPO_CONFIG.comentario
               const isMine = c.author_id === user?.id
+              const tipoClass = TIPO_COLORS[c.tipo] ?? TIPO_COLORS.comentario
+              const roleColor = ROLE_COLORS[c.author_role] ?? "text-slate-400"
               return (
-                <motion.div
-                  key={c.id}
-                  initial={{ opacity: 0, y: 8 }}
+                <motion.div key={c.id}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={cn(
-                    "flex flex-col gap-1 p-3 rounded-lg border text-sm",
-                    tipoConf.class,
+                    "rounded-lg border px-3 py-2.5 text-sm",
+                    tipoClass,
                     isMine ? "ml-6" : "mr-6"
-                  )}
-                >
-                  <div className="flex items-center gap-2 justify-between">
-                    <span className={cn("font-semibold text-xs", ROLE_COLOR[c.author_role] ?? "text-slate-300")}>
+                  )}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className={cn("text-xs font-semibold", roleColor)}>
                       {c.author_name}
-                      <span className="ml-1 text-slate-500 font-normal">({c.author_role})</span>
+                      <span className="text-slate-600 font-normal ml-1">({c.author_role})</span>
                     </span>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-[10px] text-slate-600 shrink-0">
                       {new Date(c.created_at).toLocaleString("es-CO", {
                         month: "short", day: "numeric",
-                        hour: "2-digit", minute: "2-digit"
+                        hour: "2-digit", minute: "2-digit",
                       })}
                     </span>
                   </div>
                   {c.tipo !== "comentario" && (
-                    <span className="text-xs text-slate-400 uppercase tracking-wide">{tipoConf.label}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-slate-500 block mb-1">
+                      {c.tipo.replace("_", " ")}
+                    </span>
                   )}
-                  <p className="text-slate-200 whitespace-pre-wrap leading-relaxed">{c.message}</p>
+                  <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{c.message}</p>
                 </motion.div>
               )
             })}
@@ -161,21 +168,18 @@ export default function ProjectChat({ projectId, ownerId }: Props) {
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-slate-700/50 bg-slate-800/30 flex flex-col gap-2">
-        {!isUsuario && (
-          <div className="flex gap-2">
-            {tiposDisponibles.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTipo(t)}
+      <div className="px-4 py-3 border-t border-slate-700/50 space-y-2">
+        {puedeElegiTipo && (
+          <div className="flex gap-1.5">
+            {TIPOS_DISPONIBLES.map((t) => (
+              <button key={t.value} onClick={() => setTipo(t.value)}
                 className={cn(
-                  "px-2.5 py-1 rounded-md text-xs font-medium border transition-all",
-                  tipo === t
+                  "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all",
+                  tipo === t.value
                     ? "bg-electric/20 border-electric/40 text-electric"
-                    : "border-slate-700/50 text-slate-500 hover:text-slate-300"
-                )}
-              >
-                {TIPO_CONFIG[t]?.label ?? t}
+                    : "border-slate-700/40 text-slate-600 hover:text-slate-300"
+                )}>
+                {t.label}
               </button>
             ))}
           </div>
@@ -189,13 +193,10 @@ export default function ProjectChat({ projectId, ownerId }: Props) {
             placeholder="Escribe un mensaje... (Enter para enviar)"
             className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none focus:border-electric/50 transition-colors"
           />
-          <button
-            onClick={handleSend}
-            disabled={!message.trim() || sending}
-            className="px-3 rounded-lg bg-electric/10 border border-electric/30 text-electric hover:bg-electric/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          >
+          <button onClick={handleSend} disabled={!message.trim() || sending}
+            className="px-3 rounded-lg bg-electric/10 border border-electric/30 text-electric hover:bg-electric/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
             {sending
-              ? <div className="w-4 h-4 border-2 border-electric/30 border-t-electric rounded-full animate-spin" />
+              ? <Loader2 className="w-4 h-4 animate-spin" />
               : <Send className="w-4 h-4" />
             }
           </button>

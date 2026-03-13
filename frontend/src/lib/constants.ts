@@ -6,6 +6,7 @@ export const QUADRANT_CONFIG = {
     bgClass:     "bg-cyan-500/10 border-cyan-500/30",
     textClass:   "text-cyan-400",
     glowClass:   "shadow-[0_0_20px_rgba(34,211,238,0.3)]",
+    dotClass:    "bg-cyan-400",
   },
   estrategico: {
     label:       "Estratégico",
@@ -14,6 +15,7 @@ export const QUADRANT_CONFIG = {
     bgClass:     "bg-indigo-500/10 border-indigo-500/30",
     textClass:   "text-indigo-400",
     glowClass:   "shadow-[0_0_20px_rgba(129,140,248,0.3)]",
+    dotClass:    "bg-indigo-400",
   },
   indiferente: {
     label:       "Indiferente",
@@ -22,6 +24,7 @@ export const QUADRANT_CONFIG = {
     bgClass:     "bg-slate-500/10 border-slate-500/30",
     textClass:   "text-slate-400",
     glowClass:   "shadow-[0_0_20px_rgba(148,163,184,0.2)]",
+    dotClass:    "bg-slate-400",
   },
   lujo: {
     label:       "Lujo",
@@ -30,6 +33,7 @@ export const QUADRANT_CONFIG = {
     bgClass:     "bg-red-500/10 border-red-500/30",
     textClass:   "text-red-400",
     glowClass:   "shadow-[0_0_20px_rgba(248,113,113,0.3)]",
+    dotClass:    "bg-red-400",
   },
 } as const
 

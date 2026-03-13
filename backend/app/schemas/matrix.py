@@ -1,39 +1,79 @@
+# backend/app/schemas/matrix.py
 from datetime import datetime
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel
 
 
-# ── Request ──────────────────────────────────────────────────────────────────
+# ── Categorías (Paquetes) ─────────────────────────────────────────────────────
 
-class EvaluationResponseInput(BaseModel):
-    question_id: int
-    value: int = Field(ge=1, le=5, description="Escala 1 (mínimo) a 5 (máximo)")
+class CategoryCreate(BaseModel):
+    name: str
+    description: str | None = None
+    is_default: bool = False
 
-
-class EvaluationSubmit(BaseModel):
-    responses: list[EvaluationResponseInput] = Field(
-        min_length=2,
-        description="Respuestas a las preguntas de la categoría seleccionada"
-    )
-    category_id: int | None = Field(default=None)
-    notes: str | None = Field(default=None, max_length=2000)
-
-
-# ── Response ─────────────────────────────────────────────────────────────────
 
 class CategoryRead(BaseModel):
     id: int
     name: str
     description: str | None
     is_default: bool
+    is_active: bool
 
+    model_config = {"from_attributes": True}
+
+
+# ── Preguntas ─────────────────────────────────────────────────────────────────
 
 class QuestionRead(BaseModel):
     id: int
-    category_id: int | None
-    axis: str
     text: str
+    axis: str
     weight: float
     order: int
+    category_id: int
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+# Para crear una sola pregunta dentro de un bulk
+class QuestionBulkItem(BaseModel):
+    text: str
+    axis: str        # "impact" | "effort"
+    weight: float = 1.0
+    order: int = 0
+
+
+# Para crear un paquete completo con sus preguntas en un solo request
+class CategoryWithQuestionsCreate(BaseModel):
+    name: str
+    description: str | None = None
+    is_default: bool = False
+    questions: list[QuestionBulkItem]
+
+
+class CategoryWithQuestionsRead(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    is_default: bool
+    is_active: bool
+    questions: list[QuestionRead]
+
+    model_config = {"from_attributes": True}
+
+
+# ── Evaluaciones ──────────────────────────────────────────────────────────────
+
+class ResponseItem(BaseModel):
+    question_id: int
+    value: int   # 1–5
+
+
+class EvaluationSubmit(BaseModel):
+    responses: list[ResponseItem]
+    category_id: int | None = None
+    notes: str | None = None
 
 
 class EvaluationRead(BaseModel):
@@ -46,6 +86,10 @@ class EvaluationRead(BaseModel):
     notes: str | None
     created_at: datetime
 
+    model_config = {"from_attributes": True}
+
+
+# ── Plots ─────────────────────────────────────────────────────────────────────
 
 class MatrixPlotPoint(BaseModel):
     project_id: int
@@ -55,6 +99,8 @@ class MatrixPlotPoint(BaseModel):
     quadrant: str
     evaluation_id: int
     evaluated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class QuadrantSummary(BaseModel):
