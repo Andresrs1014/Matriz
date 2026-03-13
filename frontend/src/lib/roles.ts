@@ -42,7 +42,7 @@ export function canAccessSettings(user: User | null): boolean {
 
 /** Admin puede escalar un proyecto pendiente_revision */
 export function canEscalar(user: User | null, status: string): boolean {
-  return isAdmin(user) && status === "pendiente_revision"
+  return user?.role === "admin" && status === "pendiente_revision"
 }
 
 /** Superadmin puede aprobar + asignar preguntas */
@@ -52,12 +52,12 @@ export function canSuperaprobar(user: User | null, status: string): boolean {
 
 /** Admin puede iniciar evaluación */
 export function canIniciarEvaluacion(user: User | null, status: string): boolean {
-  return isAdmin(user) && status === "preguntas_asignadas"
+  return user?.role === "admin" && status === "preguntas_asignadas"
 }
 
 /** Admin puede marcar evaluado (después de llenar matrix) */
 export function canMarcarEvaluado(user: User | null, status: string): boolean {
-  return isAdmin(user) && status === "en_evaluacion"
+  return user?.role === "admin" && status === "en_evaluacion"
 }
 
 /** Superadmin puede proveer salario */
@@ -67,7 +67,7 @@ export function canProveerSalario(user: User | null, status: string): boolean {
 
 /** Admin puede completar ROI (horas/personas) */
 export function canCompletarROI(user: User | null, status: string): boolean {
-  return isAdmin(user) && status === "pendiente_salario"
+  return user?.role === "admin" && status === "pendiente_salario"
 }
 
 /** Coordinador y admin+ pueden ver ROI calculado */

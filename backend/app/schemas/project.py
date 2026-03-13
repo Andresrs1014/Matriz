@@ -58,6 +58,7 @@ class ProjectQuestionRead(BaseModel):
     id: int
     project_id: int
     question_text: str
+    source_question_id: int | None = None
     source_question_id: int | None
     created_by: int
     created_at: datetime
