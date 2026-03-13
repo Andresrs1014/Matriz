@@ -1,70 +1,86 @@
 # backend/app/services/matrix_service.py
 from fastapi import HTTPException, status
 from sqlmodel import Session, select, col
+from typing import cast
 
 from app.models.matrix import MatrixQuestion, MatrixEvaluation, EvaluationResponse, QuestionCategory
 from app.models.project import Project
-from app.schemas.matrix import EvaluationSubmit, EvaluationRead, MatrixPlotPoint, QuadrantSummary
+from app.schemas.matrix import EvaluationSubmit, MatrixPlotPoint
 
-# ── Cuadrante ─────────────────────────────────────────────────────────────────
 
 def assign_quadrant(impact_score: float, effort_score: float) -> str:
-    alto_impacto = impact_score >= 50
-    alto_esfuerzo = effort_score >= 50
-    if alto_impacto and not alto_esfuerzo: return "esencial"
-    if alto_impacto and alto_esfuerzo:     return "estrategico"
+    alto_impacto  = impact_score  >= 50
+    alto_esfuerzo = effort_score  >= 50
+    if alto_impacto  and not alto_esfuerzo: return "esencial"
+    if alto_impacto  and alto_esfuerzo:     return "estrategico"
     if not alto_impacto and not alto_esfuerzo: return "indiferente"
     return "lujo"
 
-QUADRANT_LABELS = {
-    "esencial":    "Esencial",
-    "estrategico": "Estratégico",
-    "indiferente": "Indiferente",
-    "lujo":        "Lujo",
-}
-
-# ── Scoring ───────────────────────────────────────────────────────────────────
 
 def calculate_scores(
     db: Session,
     responses: list[dict],
 ) -> tuple[float, float]:
+    """
+    Calcula scores de impacto y esfuerzo.
+    
+    Si la pregunta no existe en MatrixQuestion (fue custom), usa distribución
+    por posición: primeras mitad = impacto, segunda mitad = esfuerzo.
+    """
     question_ids = [r["question_id"] for r in responses]
-    questions: list[MatrixQuestion] = list(
+
+    # Intentar obtener MatrixQuestions para eje y peso
+    matrix_questions: list[MatrixQuestion] = list(
         db.exec(
             select(MatrixQuestion)
             .where(col(MatrixQuestion.id).in_(question_ids))
-            .where(MatrixQuestion.is_active == True)
         )
     )
-    impact_qs = [q for q in questions if q.axis == "impact"]
-    effort_qs = [q for q in questions if q.axis == "effort"]
+    mq_map = {q.id: q for q in matrix_questions}
+
+    # Construir lista ordenada de (question_id, axis, weight)
+    ordered = []
+    for resp in responses:
+        qid = resp["question_id"]
+        if qid in mq_map:
+            q = mq_map[qid]
+            ordered.append({"id": qid, "axis": q.axis, "weight": q.weight})
+        else:
+            ordered.append({"id": qid, "axis": None, "weight": 1.0})
+
+    # Para los que no tienen eje, asignar por posición
+    no_axis = [i for i, q in enumerate(ordered) if q["axis"] is None]
+    half = len(no_axis) // 2
+    for i, idx in enumerate(no_axis):
+        ordered[idx]["axis"] = "impact" if i < half else "effort"
+
+    impact_qs = [q for q in ordered if q["axis"] == "impact"]
+    effort_qs = [q for q in ordered if q["axis"] == "effort"]
 
     if not impact_qs or not effort_qs:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="La categoría debe tener al menos una pregunta de impacto y una de esfuerzo.",
+            detail="El set de preguntas debe tener al menos 1 de impacto y 1 de esfuerzo.",
         )
 
     resp_map = {r["question_id"]: r["value"] for r in responses}
-    impact_weighted_sum = impact_max = 0.0
-    effort_weighted_sum = effort_max = 0.0
 
-    for q in questions:
-        value = resp_map.get(q.id, 1)
-        weighted_value = value * q.weight
-        if q.axis == "impact":
-            impact_weighted_sum += weighted_value
-            impact_max += 5 * q.weight
-        elif q.axis == "effort":
-            effort_weighted_sum += weighted_value
-            effort_max += 5 * q.weight
+    impact_weighted_sum = impact_max = 0.0
+    for q in impact_qs:
+        value = resp_map.get(q["id"], 1)
+        impact_weighted_sum += value * q["weight"]
+        impact_max += 5 * q["weight"]
+
+    effort_weighted_sum = effort_max = 0.0
+    for q in effort_qs:
+        value = resp_map.get(q["id"], 1)
+        effort_weighted_sum += value * q["weight"]
+        effort_max += 5 * q["weight"]
 
     impact_score = round((impact_weighted_sum / impact_max) * 100, 2) if impact_max > 0 else 0.0
     effort_score = round((effort_weighted_sum / effort_max) * 100, 2) if effort_max > 0 else 0.0
     return impact_score, effort_score
 
-# ── CRUD Categorías ───────────────────────────────────────────────────────────
 
 def get_active_categories(db: Session) -> list[QuestionCategory]:
     return list(db.exec(
@@ -73,7 +89,6 @@ def get_active_categories(db: Session) -> list[QuestionCategory]:
         .order_by(col(QuestionCategory.name))
     ))
 
-# ── CRUD Preguntas ────────────────────────────────────────────────────────────
 
 def get_active_questions(db: Session, category_id: int | None = None) -> list[MatrixQuestion]:
     query = select(MatrixQuestion).where(MatrixQuestion.is_active == True)
@@ -81,7 +96,6 @@ def get_active_questions(db: Session, category_id: int | None = None) -> list[Ma
         query = query.where(MatrixQuestion.category_id == category_id)
     return list(db.exec(query.order_by(MatrixQuestion.axis, col(MatrixQuestion.order))))
 
-# ── CRUD Evaluaciones ─────────────────────────────────────────────────────────
 
 def create_evaluation(
     db: Session,
@@ -89,9 +103,6 @@ def create_evaluation(
     owner_id: int,
     payload: EvaluationSubmit,
 ) -> MatrixEvaluation:
-    # ← CORREGIDO: solo verificar que el proyecto existe
-    # El owner_id aquí es el ID del admin que evalúa, NO el dueño del proyecto
-    # Un admin puede evaluar cualquier proyecto sin importar owner_id
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
@@ -110,14 +121,23 @@ def create_evaluation(
     )
     db.add(evaluation)
     db.flush()
-    assert evaluation.id is not None
 
+    # Solo persistir respuestas cuyo question_id existe en MatrixQuestion
+    # para no violar la FK matrixquestion.id
+    response_question_ids = [r.question_id for r in payload.responses]
+    valid_question_ids: set[int] = {
+        cast(int, q.id)
+        for q in db.exec(
+            select(MatrixQuestion).where(col(MatrixQuestion.id).in_(response_question_ids))
+        )
+    }
     for r in payload.responses:
-        db.add(EvaluationResponse(
-            evaluation_id=evaluation.id,
-            question_id=r.question_id,
-            value=r.value,
-        ))
+        if r.question_id in valid_question_ids:
+            db.add(EvaluationResponse(
+                evaluation_id=cast(int, evaluation.id),
+                question_id=r.question_id,
+                value=r.value,
+            ))
     db.commit()
     db.refresh(evaluation)
     return evaluation
@@ -126,7 +146,6 @@ def create_evaluation(
 def get_evaluations_for_project(
     db: Session, project_id: int, owner_id: int
 ) -> list[MatrixEvaluation]:
-    # ← CORREGIDO: igual, solo verificar que existe
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado.")
@@ -153,14 +172,13 @@ def get_latest_evaluation_per_project(
             .order_by(col(MatrixEvaluation.created_at).desc())
         ).first()
         if latest:
-            assert project.id is not None and latest.id is not None
             plot_points.append(MatrixPlotPoint(
-                project_id=project.id,
+                project_id=cast(int, project.id),
                 project_title=project.title,
                 impact_score=latest.impact_score,
                 effort_score=latest.effort_score,
                 quadrant=latest.quadrant,
-                evaluation_id=latest.id,
+                evaluation_id=cast(int, latest.id),
                 evaluated_at=latest.created_at,
             ))
     return plot_points
