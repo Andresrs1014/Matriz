@@ -1,329 +1,326 @@
-import { useEffect, useState } from "react"
+// frontend/src/pages/ProjectDetailPage.tsx
+import { useCallback, useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import {
-  ArrowLeft, Calendar, ClipboardList,
-  TrendingUp, Zap, Target, Clock, RotateCcw, DollarSign, MessageCircle
+  ArrowLeft, Calendar, ClipboardList, Target, Zap,
+  TrendingUp, MessageCircle, Lock,
 } from "lucide-react"
 import api from "@/lib/api"
+import { useAuthStore } from "@/store/authStore"
+import { isAdmin, isSuperAdmin, canVerROI } from "@/lib/roles"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
 import { ROI_QUADRANT_CONFIG, type ROICuadranteKey } from "@/types/roi"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
 import type { ROIRead } from "@/types/roi"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
-import ROIWizard        from "@/components/roi/ROIWizard"
-import ProjectChat      from "@/components/chat/ProjectChat"
+import ProjectChat from "@/components/chat/ProjectChat"
+import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
 
 interface Evaluation {
-  id:           number
+  id: number
   impact_score: number
   effort_score: number
-  quadrant:     string
-  notes:        string | null
-  created_at:   string
+  quadrant: string
+  notes: string | null
+  created_at: string
 }
 
-const STATUS_CONFIG = {
-  nuevo:       { label: "Nuevo",        class: "bg-slate-500/20 text-slate-300 border-slate-500/30"      },
-  en_progreso: { label: "En progreso",  class: "bg-electric/20 text-electric border-electric/30"         },
-  completado:  { label: "Completado",   class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"},
-  cancelado:   { label: "Cancelado",    class: "bg-red-500/20 text-red-400 border-red-500/30"            },
+const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
+  pendiente_revision:  { label: "Pendiente revisión",  class: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+  escalado:            { label: "Escalado",            class: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  preguntas_asignadas: { label: "Preguntas asignadas", class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  en_evaluacion:       { label: "En evaluación",       class: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  evaluado:            { label: "Evaluado",            class: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
+  pendiente_salario:   { label: "Pendiente salario",   class: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+  calculando_roi:      { label: "Calculando ROI",      class: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+  aprobado_final:      { label: "✓ Aprobado",          class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  rechazado:           { label: "Rechazado",           class: "bg-red-500/20 text-red-400 border-red-500/30" },
 }
 
 export default function ProjectDetailPage() {
-  const { id }   = useParams<{ id: string }>()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuthStore()
 
-  const [project,     setProject]     = useState<Project | null>(null)
+  const [project, setProject] = useState<Project | null>(null)
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [evaluating,  setEvaluating]  = useState(false)
-  const [roiData,     setRoiData]     = useState<ROIRead | null>(null)
-  const [roiOpen,     setRoiOpen]     = useState(false)
+  const [roiData, setRoiData] = useState<ROIRead | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [evaluating, setEvaluating] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
-  async function fetchData() {
+  const canSeeROI = canVerROI(user)
+  const canEvaluate = isAdmin(user) || isSuperAdmin(user)
+
+  const fetchData = useCallback(async () => {
     if (!id) return
     setLoading(true)
+    setFetchError(null)
     try {
-      const [projRes, evalRes, roiRes] = await Promise.all([
-        api.get<Project>(`/projects/${id}`),
-        api.get<Evaluation[]>(`/matrix/history/${id}`).catch(() => ({ data: [] as Evaluation[] })),
-        api.get<ROIRead>(`/roi/${id}`).catch(() => ({ data: null })),
+      const [projRes, evalRes] = await Promise.all([
+        api.get(`/projects/${id}`),
+        api.get(`/matrix/history/${id}`).catch(() => ({ data: [] as Evaluation[] })),
       ])
       setProject(projRes.data)
       setEvaluations(evalRes.data)
-      setRoiData(roiRes.data)
+
+      // ROI: solo si el usuario tiene permiso
+      if (canSeeROI) {
+        const roiRes = await api.get(`/roi/${id}`).catch(() => ({ data: null }))
+        setRoiData(roiRes.data)
+      }
     } catch {
-      navigate("/projects")
+      setFetchError("No se pudo cargar el proyecto.")
     } finally {
       setLoading(false)
     }
-  }
+  }, [id, canSeeROI, navigate])
 
-  useEffect(() => { fetchData() }, [id])
+  useEffect(() => { fetchData() }, [fetchData])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-electric rounded-full animate-spin border-t-transparent" />
+        <div className="w-6 h-6 border-2 border-electric/30 border-t-electric rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-sm text-red-400">{fetchError}</p>
+        <button
+          onClick={() => navigate("/projects")}
+          className="text-sm text-electric hover:underline">
+          Volver a proyectos
+        </button>
       </div>
     )
   }
 
   if (!project) return null
 
-  const latestEval  = evaluations[0] ?? null
-  const latestConfig = latestEval
-    ? QUADRANT_CONFIG[latestEval.quadrant as QuadrantKey]
-    : null
-
-  const roiConfig = roiData
-    ? ROI_QUADRANT_CONFIG[roiData.cuadrante_roi as ROICuadranteKey]
-    : null
-
-  const statusConfig = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG]
-    ?? STATUS_CONFIG.nuevo
+  const latestEval = evaluations[0] ?? null
+  const latestConfig = latestEval ? QUADRANT_CONFIG[latestEval.quadrant as QuadrantKey] : null
+  const roiConfig = roiData ? ROI_QUADRANT_CONFIG[roiData.cuadrante_roi as ROICuadranteKey] : null
+  const statusConf = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.pendiente_revision
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl">
-
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
       {/* Breadcrumb */}
-      <button
-        onClick={() => navigate("/projects")}
-        className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-      >
-        <ArrowLeft size={16} /> Volver a Proyectos
+      <button onClick={() => navigate("/projects")}
+        className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Volver a proyectos
       </button>
 
-      {/* Header del proyecto */}
-      <div className="glass-card p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap mb-2">
-              <h2 className="text-xl font-bold text-white">{project.title}</h2>
-              <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border", statusConfig.class)}>
-                {statusConfig.label}
-              </span>
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-bold text-white">{project.title}</h1>
+            <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full border", statusConf.class)}>
+              {statusConf.label}
+            </span>
+          </div>
+          {project.description && (
+            <p className="text-sm text-slate-400 mt-1.5">{project.description}</p>
+          )}
+          <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+            <span className="flex items-center gap-1">
+              <ClipboardList className="w-3.5 h-3.5" />
+              {project.source === "list" ? "Microsoft Lists" : "Manual"}
+            </span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" />
+              {new Date(project.created_at).toLocaleDateString("es-CO")}
+            </span>
+          </div>
+        </div>
+
+        {/* Botón evaluar (solo admin+) */}
+        {canEvaluate && (
+          <button onClick={() => setEvaluating(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap shrink-0">
+            <Target className="w-4 h-4" />
+            {latestEval ? "Re-evaluar" : "Evaluar en Matriz"}
+          </button>
+        )}
+      </motion.div>
+
+      {/* Layout principal — dos columnas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* ── Columna izquierda ─────────────────────────────── */}
+        <div className="space-y-5">
+
+          {/* Resultado en matriz */}
+          {latestEval && latestConfig ? (
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
+                Posición en la Matriz
+              </p>
+              <div className={cn(
+                "flex items-center gap-3 p-3 rounded-lg border mb-4",
+                latestConfig.bgClass
+              )}>
+                <div className={cn("w-3 h-3 rounded-full shrink-0", latestConfig.dotClass)} />
+                <div>
+                  <p className={cn("text-sm font-semibold", latestConfig.color)}>{latestConfig.label}</p>
+                  <p className="text-xs text-slate-400">{latestConfig.description}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <MetricBox icon={<TrendingUp className="w-4 h-4 text-electric" />}
+                  label="Impacto" value={`${latestEval.impact_score.toFixed(0)}/100`}
+                  barColor="bg-electric" barValue={latestEval.impact_score} />
+                <MetricBox icon={<Zap className="w-4 h-4 text-amber-400" />}
+                  label="Esfuerzo" value={`${latestEval.effort_score.toFixed(0)}/100`}
+                  barColor="bg-amber-400" barValue={latestEval.effort_score} />
+              </div>
             </div>
-            {project.description && (
-              <p className="text-slate-400 text-sm leading-relaxed mb-4">{project.description}</p>
+          ) : (
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                Posición en la Matriz
+              </p>
+              <div className="flex flex-col items-center justify-center py-8 gap-2 text-slate-600">
+                <Target className="w-8 h-8 opacity-30" />
+                <p className="text-sm">Aún sin evaluación</p>
+                {canEvaluate && (
+                  <button onClick={() => setEvaluating(true)}
+                    className="mt-1 text-xs text-electric hover:underline">
+                    Evaluar ahora
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ROI — visible solo para coordinador+ */}
+          {canSeeROI ? (
+            roiData && roiConfig ? (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
+                  Análisis ROI
+                </p>
+                <div className={cn(
+                  "flex items-center gap-3 p-3 rounded-lg border mb-4",
+                  roiConfig.bgClass, roiConfig.borderClass
+                )}>
+                  <p className={cn("text-sm font-semibold", roiConfig.color)}>{roiConfig.label}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <p className="text-slate-500">ROI</p>
+                    <p className="text-emerald-400 font-bold text-base mt-0.5">{roiData.roi_pct.toFixed(1)}%</p>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <p className="text-slate-500">Horas ahorradas</p>
+                    <p className="text-amber-400 font-bold text-base mt-0.5">{roiData.horas_ahorradas.toFixed(1)}h</p>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <p className="text-slate-500">Proceso actual</p>
+                    <p className="text-slate-200 font-semibold mt-0.5">{roiData.horas_proceso_actual.toFixed(1)}h</p>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <p className="text-slate-500">Proceso nuevo</p>
+                    <p className="text-slate-200 font-semibold mt-0.5">{roiData.horas_proyectadas?.toFixed(1) ?? "—"}h</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Análisis ROI</p>
+                <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-600">
+                  <TrendingUp className="w-8 h-8 opacity-30" />
+                  <p className="text-sm">ROI aún no calculado</p>
+                </div>
+              </div>
+            )
+          ) : (
+            /* Usuario normal — ROI bloqueado */
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Análisis ROI</p>
+              <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-600">
+                <Lock className="w-8 h-8 opacity-30" />
+                <p className="text-sm text-center">El análisis ROI no está disponible para tu rol</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Columna derecha — Matriz mini + Chat ─────────── */}
+        <div className="space-y-5">
+
+          {/* Mini scatter plot de matriz */}
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
+              Posición visual en la Matriz
+            </p>
+            {latestEval ? (
+              <MatrixMiniPlot
+                impactScore={latestEval.impact_score}
+                effortScore={latestEval.effort_score}
+                quadrant={latestEval.quadrant as QuadrantKey}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-48 gap-2 text-slate-600">
+                <Target className="w-8 h-8 opacity-20" />
+                <p className="text-sm">Sin posición aún</p>
+              </div>
             )}
-            <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1">
-                <ClipboardList size={12} />
-                {project.source === "list" ? "Microsoft Lists" : "Manual"}
-              </span>
-              <span className="flex items-center gap-1">
-                <Calendar size={12} />
-                {new Date(project.created_at).toLocaleDateString("es-CO")}
-              </span>
-              <span className="flex items-center gap-1">
-                <RotateCcw size={12} />
-                {evaluations.length} evaluación{evaluations.length !== 1 ? "es" : ""}
-              </span>
-            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={() => setEvaluating(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap"
-            >
-              <Target size={15} />
-              {latestEval ? "Re-evaluar" : "Evaluar"}
-            </button>
-            <button
-              onClick={() => setRoiOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium hover:bg-emerald-500/20 transition-all whitespace-nowrap"
-            >
-              <DollarSign size={15} />
-              {roiData ? "Re-evaluar ROI" : "Evaluar ROI"}
-            </button>
+          {/* Chat */}
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-700/50">
+              <MessageCircle className="w-4 h-4 text-electric" />
+              <span className="text-sm font-medium text-slate-200">Canal de comunicación</span>
+            </div>
+            <div className="h-80">
+              <ProjectChat projectId={project.id} />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Resultado actual */}
-      {latestEval && latestConfig && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={cn("glass-card p-5 border", latestConfig.bgClass)}
-        >
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-4">Posición actual en la Matriz</p>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className={cn("px-5 py-3 rounded-xl border w-fit", latestConfig.bgClass, latestConfig.glowClass)}>
-              <p className={cn("text-2xl font-bold", latestConfig.textClass)}>{latestConfig.label}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{latestConfig.description}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 flex-1">
-              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <TrendingUp size={13} className="text-cyan-400" />
-                  <span className="text-xs text-slate-400">Impacto</span>
-                </div>
-                <p className="text-2xl font-bold text-cyan-400">
-                  {latestEval.impact_score.toFixed(0)}
-                  <span className="text-sm text-slate-500">/100</span>
-                </p>
-              </div>
-              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Zap size={13} className="text-indigo-400" />
-                  <span className="text-xs text-slate-400">Esfuerzo</span>
-                </div>
-                <p className="text-2xl font-bold text-indigo-400">
-                  {latestEval.effort_score.toFixed(0)}
-                  <span className="text-sm text-slate-500">/100</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
+      {/* Wizard evaluación */}
+      {evaluating && (
+        <EvaluationWizard
+          projectId={project.id}
+          projectName={project.title}
+          onClose={() => { setEvaluating(false); fetchData() }}
+        />
       )}
+    </div>
+  )
+}
 
-      {/* ROI actual */}
-      {roiData && roiConfig && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={cn("glass-card p-5 border", roiConfig.bgClass, roiConfig.borderClass)}
-        >
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-4">Análisis de ROI</p>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className={cn("px-5 py-3 rounded-xl border w-fit", roiConfig.bgClass, roiConfig.borderClass)}>
-              <p className={cn("text-2xl font-bold", roiConfig.textClass)}>{roiConfig.label}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{roiConfig.action}</p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
-              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">ROI</p>
-                <p className={cn("text-xl font-bold", roiConfig.textClass)}>{roiData.roi_pct.toFixed(1)}%</p>
-              </div>
-              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">Horas antes</p>
-                <p className="text-xl font-bold text-white">{roiData.horas_proceso_actual.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
-              </div>
-              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">Horas proyectadas</p>
-                <p className="text-xl font-bold text-blue-400">{roiData.horas_proyectadas.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
-              </div>
-              <div className="bg-navy-800/60 rounded-xl p-3 border border-navy-700">
-                <p className="text-xs text-slate-400 mb-1">Horas ahorradas</p>
-                <p className="text-xl font-bold text-emerald-400">{roiData.horas_ahorradas.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Historial de evaluaciones */}
-      <div className="glass-card p-5">
-        <div className="flex items-center gap-2 mb-5">
-          <Clock size={15} className="text-electric" />
-          <p className="text-sm font-semibold text-white">Historial de evaluaciones</p>
-        </div>
-
-        {evaluations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-center">
-            <Target size={32} className="text-navy-700 mb-2" />
-            <p className="text-slate-400 text-sm">Aún no hay evaluaciones</p>
-            <p className="text-slate-600 text-xs mt-1">Usa el botón "Evaluar" para comenzar</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <AnimatePresence>
-              {evaluations.map((ev, i) => {
-                const config = QUADRANT_CONFIG[ev.quadrant as QuadrantKey]
-                const isLatest = i === 0
-                return (
-                  <motion.div
-                    key={ev.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={cn(
-                      "flex items-center gap-4 p-4 rounded-xl border transition-all",
-                      isLatest
-                        ? cn("border", config.bgClass, config.glowClass)
-                        : "bg-navy-800/40 border-navy-700"
-                    )}
-                  >
-                    {/* Número */}
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0",
-                      isLatest ? cn(config.bgClass, config.textClass) : "bg-navy-700 text-slate-400"
-                    )}>
-                      {evaluations.length - i}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={cn("text-sm font-semibold", isLatest ? config.textClass : "text-white")}>
-                          {config.label}
-                        </span>
-                        {isLatest && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-electric/20 text-electric border border-electric/30">
-                            Actual
-                          </span>
-                        )}
-                      </div>
-                      {ev.notes && (
-                        <p className="text-xs text-slate-400 truncate mt-0.5">{ev.notes}</p>
-                      )}
-                    </div>
-
-                    {/* Scores */}
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-slate-400">
-                        I: <span className="text-cyan-400 font-medium">{ev.impact_score.toFixed(0)}</span>
-                        {" · "}
-                        E: <span className="text-indigo-400 font-medium">{ev.effort_score.toFixed(0)}</span>
-                      </p>
-                      <p className="text-[10px] text-slate-600 mt-0.5">
-                        {new Date(ev.created_at).toLocaleDateString("es-CO")}
-                      </p>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
-          </div>
-        )}
+// ── Componentes locales ────────────────────────────────────────────────────────
+function MetricBox({
+  icon, label, value, barColor, barValue,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  barColor: string
+  barValue: number
+}) {
+  return (
+    <div className="bg-slate-800/60 rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-1.5">
+        {icon}
+        <span className="text-xs text-slate-400">{label}</span>
       </div>
-
-      {/* Canal de comunicación */}
-      <div className="mt-6">
-        <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-          <MessageCircle className="w-4 h-4 text-electric" />
-          Canal de comunicación
-        </h3>
-        <ProjectChat projectId={project.id} ownerId={project.owner_id} />
+      <p className="text-sm font-bold text-white">{value}</p>
+      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", barColor)}
+          style={{ width: `${barValue}%` }} />
       </div>
-
-      {/* Wizard de evaluación */}
-      <AnimatePresence>
-        {evaluating && (
-          <EvaluationWizard
-            projectId={project.id}
-            projectName={project.title}
-            onClose={() => { setEvaluating(false); fetchData() }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Wizard ROI */}
-      <AnimatePresence>
-        {roiOpen && (
-          <ROIWizard
-            projectId={project.id}
-            projectName={project.title}
-            onClose={() => { setRoiOpen(false); fetchData() }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   )
 }
