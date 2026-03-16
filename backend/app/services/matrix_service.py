@@ -5,6 +5,7 @@ from app.models.matrix import (
 )
 from app.models.project_question import ProjectQuestion
 from app.schemas.matrix import EvaluationSubmit
+from sqlmodel import col  
 
 
 def calculate_scores(responses: list[dict]) -> tuple[float, float]:
@@ -97,3 +98,56 @@ def create_evaluation(project_id: int, payload: EvaluationSubmit, db: Session) -
     db.commit()
     db.refresh(evaluation)
     return evaluation
+
+# ── Agregar al final de matrix_service.py ─────────────────────────────────────
+
+def get_active_categories(db: Session) -> list[QuestionCategory]:
+    """Retorna todos los paquetes de preguntas activos."""
+    return list(db.exec(
+        select(QuestionCategory).where(QuestionCategory.is_active == True)
+    ).all())
+
+
+def get_active_questions(db: Session, category_id: int | None = None) -> list[MatrixQuestion]:
+    """Retorna preguntas activas, opcionalmente filtradas por paquete."""
+    query = select(MatrixQuestion).where(MatrixQuestion.is_active == True)
+    if category_id is not None:
+        query = query.where(MatrixQuestion.category_id == category_id)
+    return list(db.exec(query).all())
+
+
+def get_evaluations_for_project(
+    db: Session, project_id: int, owner_id: int | None = None
+) -> list[MatrixEvaluation]:
+    """Historial de evaluaciones de un proyecto."""
+    return list(db.exec(
+        select(MatrixEvaluation)
+        .where(MatrixEvaluation.project_id == project_id)
+        .order_by(col(MatrixEvaluation.created_at))  # ← col() corregido
+    ).all())
+
+
+def get_latest_evaluation_per_project(
+    db: Session, owner_id: int | None = None
+) -> list[MatrixEvaluation]:
+    """Última evaluación de cada proyecto para el scatter plot."""
+    project_ids = db.exec(
+        select(MatrixEvaluation.project_id).distinct()
+    ).all()
+
+    results = []
+    for pid in project_ids:
+        latest = db.exec(
+            select(MatrixEvaluation)
+            .where(MatrixEvaluation.project_id == pid)
+            .order_by(col(MatrixEvaluation.created_at).desc())  # ← col() corregido
+        ).first()
+        if latest:
+            if owner_id is None:
+                results.append(latest)
+            else:
+                from app.models.project import Project
+                project = db.get(Project, pid)
+                if project and project.owner_id == owner_id:
+                    results.append(latest)
+    return results
