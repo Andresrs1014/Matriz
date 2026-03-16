@@ -15,23 +15,12 @@ interface EvalResult {
   quadrant: QuadrantKey
 }
 
+// ← CORREGIDO: ahora incluye axis (viene del backend)
 interface ProjectQuestion {
   id: number
   question_text: string
+  axis: "impact" | "effort"           // ← NUEVO campo
   source_question_id: number | null
-}
-
-// Adaptamos ProjectQuestion al shape que espera QuestionStep
-function toWizardQuestion(pq: ProjectQuestion, index: number, total: number) {
-  return {
-    id: pq.id,
-    text: pq.question_text,
-    // axis visual: primera mitad impacto, segunda esfuerzo (solo para mostrar color)
-    axis: index < Math.ceil(total / 2) ? "impact" : "effort",
-    weight: 1,
-    order: index,
-    category_id: null,
-  }
 }
 
 interface EvaluationWizardProps {
@@ -42,11 +31,9 @@ interface EvaluationWizardProps {
 
 export default function EvaluationWizard({ projectId, projectName, onClose }: EvaluationWizardProps) {
   const { submitEvaluation } = useMatrix()
-
   const [projectQuestions, setProjectQuestions] = useState<ProjectQuestion[]>([])
   const [loadingPQ, setLoadingPQ] = useState(true)
   const [loadError, setLoadError] = useState("")
-
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [step, setStep] = useState(0)
   const [notes, setNotes] = useState("")
@@ -71,9 +58,17 @@ export default function EvaluationWizard({ projectId, projectName, onClose }: Ev
     loadProjectQuestions()
   }, [projectId])
 
-  const wizardQuestions = projectQuestions.map((pq, i) =>
-    toWizardQuestion(pq, i, projectQuestions.length)
-  )
+  // ← CORREGIDO: usa axis real del modelo, no por posición
+  const wizardQuestions = projectQuestions.map((pq, index) => ({
+    id: pq.id,
+    text: pq.question_text,
+    axis: pq.axis,                      // ← directo del backend
+    weight: 1,
+    order: index,
+    category_id: null,
+    source_question_id: pq.source_question_id,
+  }))
+
   const current = wizardQuestions[step]
   const isLast = step === wizardQuestions.length - 1
 
@@ -83,11 +78,17 @@ export default function EvaluationWizard({ projectId, projectName, onClose }: Ev
 
   async function handleSubmit() {
     setLoading(true)
-    // Usamos el ID real de la ProjectQuestion para que el backend mapee correctamente
-    const responses = projectQuestions.map((pq) => ({
-      question_id: pq.source_question_id ?? pq.id,
-      value: (answers[pq.id] ?? 3) as 1 | 2 | 3 | 4 | 5,
-    }))
+    // ← CORREGIDO: distingue entre preguntas del catálogo y preguntas custom
+    const responses = projectQuestions.map((pq) => {
+      const value = (answers[pq.id] ?? 3) as 1 | 2 | 3 | 4 | 5
+      if (pq.source_question_id !== null) {
+        // Pregunta del catálogo (MatrixQuestion)
+        return { question_id: pq.source_question_id, project_question_id: null, value }
+      } else {
+        // Pregunta custom (ProjectQuestion sin origen en catálogo)
+        return { question_id: null, project_question_id: pq.id, value }
+      }
+    })
 
     const evaluation = await submitEvaluation(projectId, {
       responses,
@@ -100,7 +101,6 @@ export default function EvaluationWizard({ projectId, projectName, onClose }: Ev
         effortScore: evaluation.effort_score,
         quadrant: evaluation.quadrant as QuadrantKey,
       })
-      // Marcar proyecto como evaluado automáticamente
       await api.post(`/projects/${projectId}/marcar-evaluado`).catch(() => {})
     }
     setLoading(false)
@@ -131,6 +131,15 @@ export default function EvaluationWizard({ projectId, projectName, onClose }: Ev
             {!loadingPQ && !loadError && (
               <span className="text-[10px] text-amber-400 font-medium">
                 {projectQuestions.length} preguntas asignadas
+                {/* Mostrar distribución de ejes */}
+                {" · "}
+                <span className="text-cyan-400">
+                  {projectQuestions.filter(q => q.axis === "impact").length} impacto
+                </span>
+                {" / "}
+                <span className="text-indigo-400">
+                  {projectQuestions.filter(q => q.axis === "effort").length} esfuerzo
+                </span>
               </span>
             )}
           </div>
@@ -153,14 +162,16 @@ export default function EvaluationWizard({ projectId, projectName, onClose }: Ev
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
               <AlertCircle className="w-8 h-8 text-amber-400" />
               <p className="text-sm text-slate-300">{loadError}</p>
-              <button onClick={onClose}
-                className="mt-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700 transition-all">
+              <button
+                onClick={onClose}
+                className="mt-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700 transition-all"
+              >
                 Cerrar
               </button>
             </div>
           )}
 
-          {/* Resultado */}
+          {/* Resultado final */}
           {!loadingPQ && !loadError && result && (
             <ScoreResult
               impactScore={result.impactScore}
@@ -216,7 +227,9 @@ export default function EvaluationWizard({ projectId, projectName, onClose }: Ev
               <ChevronLeft size={16} />
               {step === 0 ? "Cancelar" : "Anterior"}
             </button>
+
             <span className="text-xs text-slate-600">{step + 1} / {wizardQuestions.length}</span>
+
             <button
               onClick={handleNext}
               disabled={answers[current.id] === undefined || loading}

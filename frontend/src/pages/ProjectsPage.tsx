@@ -327,12 +327,14 @@ export default function ProjectsPage() {
       <AnimatePresence>
         {activeProject && modal === "superaprobar" && (
           <SuperadminApprovalModal
-            projectId={activeProject.id}
-            projectTitle={activeProject.title}
-            onClose={closeModal}
-            onSuccess={handleModalSuccess}
+          projectId={activeProject.id}
+          projectTitle={activeProject.title}
+          onClose={closeModal}
+          onSuccess={handleModalSuccess}
+          showSalaryCorrection={activeProject.status === "pendiente_salario"}  // ← solo esto
           />
-        )}
+          )}
+
         {activeProject && modal === "salario" && (
           <SuperadminSalaryModal
             projectId={activeProject.id}

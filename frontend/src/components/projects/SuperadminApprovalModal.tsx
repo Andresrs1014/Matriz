@@ -1,8 +1,9 @@
 // frontend/src/components/projects/SuperadminApprovalModal.tsx
 //
 // ARQUITECTURA DE PASOS:
-//   Step "list"   → muestra paquetes existentes + botón "Crear paquete nuevo"
-//   Step "create" → formulario inline para crear paquete (Opción 1 actual)
+// Step "list" → muestra paquetes existentes + botón "Crear paquete nuevo"
+// Step "create" → formulario inline para crear paquete (Opción 1 actual)
+// Step "fix-salary" → ← NUEVO: corregir salario mal ingresado
 //
 // TODO (Opción 2 futura): en Step "create", reemplazar el formulario inline
 // por: navigate('/config/matrix') y dejar que el usuario vuelva manualmente.
@@ -10,7 +11,9 @@
 
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Plus, Trash2, Loader2, CheckCircle2, ChevronLeft, Package } from "lucide-react"
+import {
+  X, Plus, Trash2, Loader2, CheckCircle2, ChevronLeft, Package, AlertTriangle
+} from "lucide-react"
 import api from "@/lib/api"
 import { useProjectActions } from "@/hooks/useProjectActions"
 import { cn } from "@/lib/utils"
@@ -32,11 +35,15 @@ interface Props {
   projectTitle: string
   onClose: () => void
   onSuccess: () => void
+  // ← NUEVO: si el proyecto ya tiene salario registrado, permitir corrección
+  showSalaryCorrection?: boolean
 }
 
-type Step = "list" | "create"
+type Step = "list" | "create" | "fix-salary"
 
-export default function SuperadminApprovalModal({ projectId, projectTitle, onClose, onSuccess }: Props) {
+export default function SuperadminApprovalModal({
+  projectId, projectTitle, onClose, onSuccess, showSalaryCorrection = false
+}: Props) {
   const { superaprobar, loading: approving, error: approveError } = useProjectActions()
 
   // ── List step ──────────────────────────────────────────────────────────────
@@ -55,6 +62,14 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
   ])
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState("")
+
+  // ── Fix salary step ────────────────────────────────────────────────────────
+  const [salaryCargo, setSalaryCargo] = useState("")
+  const [salaryBase, setSalaryBase] = useState("")
+  const [salarySede, setSalarySede] = useState("")
+  const [fixingSalary, setFixingSalary] = useState(false)
+  const [fixSalaryError, setFixSalaryError] = useState("")
+  const [fixSalaryOk, setFixSalaryOk] = useState(false)
 
   // ── Cargar categorías ──────────────────────────────────────────────────────
   async function loadCategories() {
@@ -100,20 +115,22 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
     const hasEffort = filled.some((q) => q.axis === "effort")
     if (!hasImpact) { setCreateError("Agrega al menos 1 pregunta de Impacto."); return }
     if (!hasEffort) { setCreateError("Agrega al menos 1 pregunta de Esfuerzo."); return }
-
     setCreating(true)
     try {
       const { data } = await api.post("/matrix/categories/with-questions", {
         name: newPackageName.trim(),
         description: newPackageDesc.trim() || null,
         is_default: false,
-        questions: filled.map((q, i) => ({ text: q.text.trim(), axis: q.axis, weight: 1.0, order: i })),
+        questions: filled.map((q, i) => ({
+          text: q.text.trim(),
+          axis: q.axis,
+          weight: 1.0,
+          order: i,
+        })),
       })
-      // Volver a la lista con el nuevo paquete ya seleccionado
       await loadCategories()
       setSelectedCategoryId(data.id)
       setStep("list")
-      // Reset form
       setNewPackageName("")
       setNewPackageDesc("")
       setNewQuestions([{ text: "", axis: "impact" }, { text: "", axis: "effort" }])
@@ -124,10 +141,30 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
     }
   }
 
+  // ── Fix salary: handler ────────────────────────────────────────────────────
+  async function handleFixSalary() {
+    setFixSalaryError("")
+    const salNum = parseFloat(salaryBase.replace(/\./g, "").replace(",", "."))
+    if (!salaryCargo.trim()) { setFixSalaryError("El cargo es obligatorio."); return }
+    if (isNaN(salNum) || salNum <= 0) { setFixSalaryError("El salario debe ser un número positivo."); return }
+    setFixingSalary(true)
+    try {
+      await api.patch(`/projects/${projectId}/corregir-salario`, {
+        cargo: salaryCargo.trim(),
+        salario_base: salNum,
+        sede: salarySede.trim() || "No especificada",
+      })
+      setFixSalaryOk(true)
+    } catch (e: any) {
+      setFixSalaryError(e?.response?.data?.detail ?? "Error al corregir el salario.")
+    } finally {
+      setFixingSalary(false)
+    }
+  }
+
   // ── Aprobar proyecto con el paquete seleccionado ───────────────────────────
   async function handleApprove() {
     if (!selectedCategoryId) return
-    // Obtener todas las preguntas del paquete seleccionado
     const { data: questions } = await api.get(`/matrix/questions?category_id=${selectedCategoryId}`)
     const question_ids: number[] = questions.map((q: any) => q.id)
     const result = await superaprobar(projectId, {
@@ -140,6 +177,12 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
   // ── Preguntas del form divididas por eje ──────────────────────────────────
   const impactQs = newQuestions.map((q, i) => ({ ...q, idx: i })).filter((q) => q.axis === "impact")
   const effortQs = newQuestions.map((q, i) => ({ ...q, idx: i })).filter((q) => q.axis === "effort")
+
+  const stepTitle = {
+    list: "Aprobar proyecto",
+    create: "Crear paquete de preguntas",
+    "fix-salary": "Corregir salario",
+  }[step]
 
   return (
     <AnimatePresence>
@@ -157,16 +200,16 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 shrink-0">
             <div className="flex items-center gap-3">
-              {step === "create" && (
-                <button onClick={() => { setStep("list"); setCreateError("") }}
-                  className="text-slate-500 hover:text-white transition-colors">
+              {step !== "list" && (
+                <button
+                  onClick={() => { setStep("list"); setCreateError(""); setFixSalaryError(""); setFixSalaryOk(false) }}
+                  className="text-slate-500 hover:text-white transition-colors"
+                >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
               )}
               <div>
-                <h2 className="text-base font-semibold text-white">
-                  {step === "list" ? "Aprobar proyecto" : "Crear paquete de preguntas"}
-                </h2>
+                <h2 className="text-base font-semibold text-white">{stepTitle}</h2>
                 <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{projectTitle}</p>
               </div>
             </div>
@@ -244,6 +287,17 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
                   <Plus className="w-4 h-4" />
                   Crear paquete nuevo
                 </button>
+
+                {/* ← NUEVO: botón corregir salario (solo si ya está en pendiente_salario) */}
+                {showSalaryCorrection && (
+                  <button
+                    onClick={() => setStep("fix-salary")}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-amber-700/40 text-amber-600 text-sm hover:border-amber-500/60 hover:text-amber-400 transition-all"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Corregir salario ingresado
+                  </button>
+                )}
 
                 {approveError && (
                   <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
@@ -352,6 +406,62 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
                 )}
               </div>
             )}
+
+            {/* ── STEP: fix-salary ────────────────────────────────────────── */}
+            {step === "fix-salary" && (
+              <div className="space-y-4">
+                {fixSalaryOk ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                    <CheckCircle2 className="w-10 h-10 text-green-400" />
+                    <p className="text-sm text-slate-300 font-medium">Salario corregido correctamente.</p>
+                    <button
+                      onClick={() => { setStep("list"); setFixSalaryOk(false) }}
+                      className="mt-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm hover:bg-slate-700 transition-all"
+                    >
+                      Volver
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      Esto sobreescribirá el salario y recalculará el valor/hora. El admin deberá volver a completar las horas.
+                    </p>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Cargo *</label>
+                      <input value={salaryCargo} onChange={(e) => setSalaryCargo(e.target.value)}
+                        placeholder="Ej: Analista de procesos"
+                        className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Salario base (COP) *</label>
+                      <input value={salaryBase} onChange={(e) => setSalaryBase(e.target.value)}
+                        placeholder="Ej: 3500000"
+                        type="text"
+                        inputMode="numeric"
+                        className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Sede <span className="text-slate-600">(opcional)</span></label>
+                      <input value={salarySede} onChange={(e) => setSalarySede(e.target.value)}
+                        placeholder="Ej: Bogotá"
+                        className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                      />
+                    </div>
+
+                    {fixSalaryError && (
+                      <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                        {fixSalaryError}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Footer */}
@@ -361,25 +471,31 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
               Cancelar
             </button>
 
-            {step === "list" ? (
+            {step === "list" && (
               <button onClick={handleApprove}
                 disabled={approving || !selectedCategoryId}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                {approving
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <CheckCircle2 className="w-4 h-4" />
-                }
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {approving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 {approving ? "Aprobando..." : "Aprobar proyecto"}
               </button>
-            ) : (
-              <button onClick={handleCreatePackage}
-                disabled={creating}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                {creating
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Package className="w-4 h-4" />
-                }
+            )}
+
+            {step === "create" && (
+              <button onClick={handleCreatePackage} disabled={creating}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
                 {creating ? "Guardando..." : "Guardar paquete"}
+              </button>
+            )}
+
+            {step === "fix-salary" && !fixSalaryOk && (
+              <button onClick={handleFixSalary} disabled={fixingSalary}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                {fixingSalary ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                {fixingSalary ? "Guardando..." : "Corregir salario"}
               </button>
             )}
           </div>
