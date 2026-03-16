@@ -3,14 +3,11 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 
-
 # ── Categorías (Paquetes) ─────────────────────────────────────────────────────
-
 class CategoryCreate(BaseModel):
     name: str
     description: str | None = None
     is_default: bool = False
-
 
 class CategoryRead(BaseModel):
     id: int
@@ -18,12 +15,9 @@ class CategoryRead(BaseModel):
     description: str | None
     is_default: bool
     is_active: bool
-
     model_config = {"from_attributes": True}
 
-
 # ── Preguntas ─────────────────────────────────────────────────────────────────
-
 class QuestionRead(BaseModel):
     id: int
     text: str
@@ -32,25 +26,19 @@ class QuestionRead(BaseModel):
     order: int
     category_id: int
     is_active: bool
-
     model_config = {"from_attributes": True}
 
-
-# Para crear una sola pregunta dentro de un bulk
 class QuestionBulkItem(BaseModel):
     text: str
-    axis: str        # "impact" | "effort"
+    axis: str  # "impact" | "effort"
     weight: float = 1.0
     order: int = 0
 
-
-# Para crear un paquete completo con sus preguntas en un solo request
 class CategoryWithQuestionsCreate(BaseModel):
     name: str
     description: str | None = None
     is_default: bool = False
     questions: list[QuestionBulkItem]
-
 
 class CategoryWithQuestionsRead(BaseModel):
     id: int
@@ -59,22 +47,18 @@ class CategoryWithQuestionsRead(BaseModel):
     is_default: bool
     is_active: bool
     questions: list[QuestionRead]
-
     model_config = {"from_attributes": True}
 
-
 # ── Evaluaciones ──────────────────────────────────────────────────────────────
-
 class ResponseItem(BaseModel):
-    question_id: int
-    value: int   # 1–5
-
+    question_id: int | None = None                   # MatrixQuestion (catálogo)
+    project_question_id: int | None = None           # ← NUEVO: ProjectQuestion (custom)
+    value: int  # 1–5
 
 class EvaluationSubmit(BaseModel):
     responses: list[ResponseItem]
     category_id: int | None = None
     notes: str | None = None
-
 
 class EvaluationRead(BaseModel):
     id: int
@@ -85,12 +69,9 @@ class EvaluationRead(BaseModel):
     quadrant: str
     notes: str | None
     created_at: datetime
-
     model_config = {"from_attributes": True}
 
-
 # ── Plots ─────────────────────────────────────────────────────────────────────
-
 class MatrixPlotPoint(BaseModel):
     project_id: int
     project_title: str
@@ -99,9 +80,7 @@ class MatrixPlotPoint(BaseModel):
     quadrant: str
     evaluation_id: int
     evaluated_at: datetime
-
     model_config = {"from_attributes": True}
-
 
 class QuadrantSummary(BaseModel):
     quadrant: str
