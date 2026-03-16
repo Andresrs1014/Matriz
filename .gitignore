@@ -1,3 +1,6 @@
+# ── Documentación local (no sube al repo) ─────────────────────────────
+auditorias/
+
 # ── Python / Backend ──────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
