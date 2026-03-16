@@ -11,6 +11,11 @@ interface MatrixBubbleProps {
   index:  number
 }
 
+const W   = 560
+const PAD = 48
+const TW  = 180
+const TH  = 80
+
 export default function MatrixBubble({ point, x, y, index }: MatrixBubbleProps) {
   const [hovered, setHovered] = useState(false)
   const config = QUADRANT_CONFIG[point.quadrant as QuadrantKey]
@@ -62,14 +67,17 @@ export default function MatrixBubble({ point, x, y, index }: MatrixBubbleProps) 
 
       {/* Tooltip */}
       <AnimatePresence>
-        {hovered && (
-          <foreignObject x={16} y={-48} width={180} height={80} style={{ overflow: "visible" }}>
+        {hovered && (() => {
+          const tx = x + 16 + TW > W - PAD ? -16 - TW : 16
+          const ty = y - 48 < PAD          ? 16        : -48
+          return (
+          <foreignObject x={tx} y={ty} width={TW} height={TH} style={{ overflow: "visible" }}>
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               className="glass-card px-3 py-2 text-xs pointer-events-none"
-              style={{ width: 180 }}
+              style={{ width: TW }}
             >
               <p className={cn("font-semibold mb-0.5", config.textClass)}>{config.label}</p>
               <p className="text-white text-[11px] leading-snug truncate">{point.project_title}</p>
@@ -80,7 +88,8 @@ export default function MatrixBubble({ point, x, y, index }: MatrixBubbleProps) 
               </p>
             </motion.div>
           </foreignObject>
-        )}
+          )
+        })()}
       </AnimatePresence>
     </g>
   )

@@ -172,7 +172,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 mx-auto w-full max-w-[1610px] space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="relative flex-1">

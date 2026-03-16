@@ -35,7 +35,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-5xl">
+    <div className="p-6 mx-auto w-full max-w-[1610px] space-y-6 animate-fade-in">
       {error && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-sm">

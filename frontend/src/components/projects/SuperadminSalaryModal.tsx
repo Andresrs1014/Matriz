@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, DollarSign, Loader2 } from "lucide-react"
 import { useProjectActions } from "@/hooks/useProjectActions"
 
-const SEDES = ["Bogotá", "Medellín", "Cali", "Barranquilla", "Bucaramanga", "Otra"]
+const SEDES = ["LOGIMAT", "LOGIMAT B2", "IMC CARGO", "IMC DEPOSITO"]
 
 interface Props {
   projectId: number
@@ -22,6 +22,7 @@ export default function SuperadminSalaryModal({ projectId, projectTitle, onClose
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!salario || !cargo) return
+    // Llama SIEMPRE al endpoint correcto de salario
     const result = await proveerSalario(projectId, {
       salario_base: parseFloat(salario),
       cargo,

@@ -25,7 +25,7 @@ interface Parte2State {
   horas_proyectadas: string
 }
 
-const SEDES = ["IMCCARGO", "LOGIMAT", "IMCDEPOSITO"]
+const SEDES = ["LOGIMAT", "LOGIMAT B2", "IMC CARGO", "IMC DEPOSITO"]
 
 function NumericField({
   label, hint, value, unit, onChange,

@@ -16,6 +16,7 @@ import type { ROIPlotPoint } from "@/types/roi"
 import type { MatrixPlotPoint } from "@/types/matrix"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/authStore"
+import { useROIEventStore } from "@/store/roiEventStore"
 import { isAdmin, isCoordinador } from "@/lib/roles"
 
 type TabKey = "operacional" | "roi"
@@ -53,6 +54,12 @@ export default function MatrixPage() {
 
   const { plotPoints,    loading: loadingOp,  fetchPlotPoints } = useMatrix()
   const { roiPlotPoints, loading: loadingROI, fetchROIPlot }    = useROIPlot()
+  const { roiRefreshCount } = useROIEventStore()
+
+  // Auto-refresh la matriz ROI cuando llega un evento WS de ROI aprobado
+  useEffect(() => {
+    if (roiRefreshCount > 0 && canSeeROI) fetchROIPlot()
+  }, [roiRefreshCount]) // eslint-disable-line
 
   // Guard: si el usuario pierde acceso a ROI, redirige a operacional
   useEffect(() => {
@@ -81,7 +88,7 @@ export default function MatrixPage() {
   const loading = tab === "operacional" ? loadingOp : loadingROI
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="p-6 mx-auto w-full max-w-[1610px] space-y-6 animate-fade-in">
 
       {/* ── Header: Tabs + filtros + refresh ── */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -254,7 +261,7 @@ export default function MatrixPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {roiPlotPoints.map((p) => {
-                  const config = ROI_QUADRANT_CONFIG[p.cuadrante_roi as ROICuadranteKey]
+                  const config = ROI_QUADRANT_CONFIG[p.cuadrante_roi as ROICuadranteKey] ?? ROI_QUADRANT_CONFIG.bajo_impacto
                   const isSel  = selRoi?.roi_id === p.roi_id
                   return (
                     <button key={p.roi_id} onClick={() => setSelRoi(isSel ? null : p)}
@@ -348,7 +355,7 @@ function OpProjectPanel({ point, onClose }: { point: MatrixPlotPoint; onClose: (
 // Panel lateral — Matriz ROI
 // ══════════════════════════════════════════════════════════
 function ROIProjectPanel({ point, onClose }: { point: ROIPlotPoint; onClose: () => void }) {
-  const config       = ROI_QUADRANT_CONFIG[point.cuadrante_roi as ROICuadranteKey]
+  const config       = ROI_QUADRANT_CONFIG[point.cuadrante_roi as ROICuadranteKey] ?? ROI_QUADRANT_CONFIG.bajo_impacto
   const reduccionPct = point.horas_proceso_actual > 0
     ? ((point.horas_ahorradas / point.horas_proceso_actual) * 100)
     : 0

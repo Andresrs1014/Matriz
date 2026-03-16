@@ -31,7 +31,7 @@ export default function MatrixPlot({ points, filter, selectedId, onSelect }: Mat
 
   return (
     <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-2xl mx-auto" style={{ minWidth: 320 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-2xl mx-auto" style={{ minWidth: 320 }} overflow="visible">
 
         {/* Fondos de cuadrante */}
         <rect x={PAD}  y={PAD}  width={cx - PAD}     height={cy - PAD}     fill="rgba(34,211,238,0.04)"  stroke="rgba(34,211,238,0.12)"  strokeWidth={1} rx={8} />

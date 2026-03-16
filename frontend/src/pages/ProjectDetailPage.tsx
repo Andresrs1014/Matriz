@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   ArrowLeft, Calendar, ClipboardList, Target, Zap,
-  TrendingUp, MessageCircle, Lock,
+  TrendingUp, MessageCircle,
 } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
@@ -16,7 +16,6 @@ import type { Project } from "@/types/project"
 import type { ROIRead } from "@/types/roi"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import ProjectChat from "@/components/chat/ProjectChat"
-import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
 
 interface Evaluation {
   id: number
@@ -105,186 +104,138 @@ export default function ProjectDetailPage() {
 
   const latestEval = evaluations[0] ?? null
   const latestConfig = latestEval ? QUADRANT_CONFIG[latestEval.quadrant as QuadrantKey] : null
-  const roiConfig = roiData ? ROI_QUADRANT_CONFIG[roiData.cuadrante_roi as ROICuadranteKey] : null
+  const roiConfig = roiData ? ROI_QUADRANT_CONFIG[roiData.cuadrante_roi as ROICuadranteKey] ?? ROI_QUADRANT_CONFIG.bajo_impacto : null
   const statusConf = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.pendiente_revision
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
-      {/* Breadcrumb */}
-      <button onClick={() => navigate("/projects")}
-        className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Volver a proyectos
+    <div className="p-6 mx-auto w-full max-w-[1126px] animate-fade-in flex flex-col gap-6">
+
+      {/* Breadcrumb — siempre arriba a la izquierda */}
+      <button
+        onClick={() => navigate("/projects")}
+        className="self-start flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+      >
+        <ArrowLeft size={16} /> Volver a Proyectos
       </button>
 
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-white">{project.title}</h1>
-            <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full border", statusConf.class)}>
-              {statusConf.label}
-            </span>
-          </div>
-          {project.description && (
-            <p className="text-sm text-slate-400 mt-1.5">{project.description}</p>
-          )}
-          <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-            <span className="flex items-center gap-1">
-              <ClipboardList className="w-3.5 h-3.5" />
-              {project.source === "list" ? "Microsoft Lists" : "Manual"}
-            </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              {new Date(project.created_at).toLocaleDateString("es-CO")}
-            </span>
-          </div>
-        </div>
-
-        {/* Botón evaluar (solo admin+) */}
-        {canEvaluate && (
-          <button onClick={() => setEvaluating(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap shrink-0">
-            <Target className="w-4 h-4" />
-            {latestEval ? "Re-evaluar" : "Evaluar en Matriz"}
-          </button>
-        )}
-      </motion.div>
-
-      {/* Layout principal — dos columnas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {/* ── Columna izquierda ─────────────────────────────── */}
-        <div className="space-y-5">
-
-          {/* Resultado en matriz */}
-          {latestEval && latestConfig ? (
-            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
-                Posición en la Matriz
-              </p>
-              <div className={cn(
-                "flex items-center gap-3 p-3 rounded-lg border mb-4",
-                latestConfig.bgClass
-              )}>
-                <div className={cn("w-3 h-3 rounded-full shrink-0", latestConfig.dotClass)} />
-                <div>
-                  <p className={cn("text-sm font-semibold", latestConfig.color)}>{latestConfig.label}</p>
-                  <p className="text-xs text-slate-400">{latestConfig.description}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <MetricBox icon={<TrendingUp className="w-4 h-4 text-electric" />}
-                  label="Impacto" value={`${latestEval.impact_score.toFixed(0)}/100`}
-                  barColor="bg-electric" barValue={latestEval.impact_score} />
-                <MetricBox icon={<Zap className="w-4 h-4 text-amber-400" />}
-                  label="Esfuerzo" value={`${latestEval.effort_score.toFixed(0)}/100`}
-                  barColor="bg-amber-400" barValue={latestEval.effort_score} />
-              </div>
+      <div className="glass-card p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap mb-2">
+              <h2 className="text-xl font-bold text-white">{project.title}</h2>
+              <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border", statusConf.class)}>
+                {statusConf.label}
+              </span>
             </div>
-          ) : (
-            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
-                Posición en la Matriz
-              </p>
-              <div className="flex flex-col items-center justify-center py-8 gap-2 text-slate-600">
-                <Target className="w-8 h-8 opacity-30" />
-                <p className="text-sm">Aún sin evaluación</p>
-                {canEvaluate && (
-                  <button onClick={() => setEvaluating(true)}
-                    className="mt-1 text-xs text-electric hover:underline">
-                    Evaluar ahora
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ROI — visible solo para coordinador+ */}
-          {canSeeROI ? (
-            roiData && roiConfig ? (
-              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
-                  Análisis ROI
-                </p>
-                <div className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border mb-4",
-                  roiConfig.bgClass, roiConfig.borderClass
-                )}>
-                  <p className={cn("text-sm font-semibold", roiConfig.color)}>{roiConfig.label}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="bg-slate-800/60 rounded-lg p-3">
-                    <p className="text-slate-500">ROI</p>
-                    <p className="text-emerald-400 font-bold text-base mt-0.5">{roiData.roi_pct.toFixed(1)}%</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-lg p-3">
-                    <p className="text-slate-500">Horas ahorradas</p>
-                    <p className="text-amber-400 font-bold text-base mt-0.5">{roiData.horas_ahorradas.toFixed(1)}h</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-lg p-3">
-                    <p className="text-slate-500">Proceso actual</p>
-                    <p className="text-slate-200 font-semibold mt-0.5">{roiData.horas_proceso_actual.toFixed(1)}h</p>
-                  </div>
-                  <div className="bg-slate-800/60 rounded-lg p-3">
-                    <p className="text-slate-500">Proceso nuevo</p>
-                    <p className="text-slate-200 font-semibold mt-0.5">{roiData.horas_proyectadas?.toFixed(1) ?? "—"}h</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Análisis ROI</p>
-                <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-600">
-                  <TrendingUp className="w-8 h-8 opacity-30" />
-                  <p className="text-sm">ROI aún no calculado</p>
-                </div>
-              </div>
-            )
-          ) : (
-            /* Usuario normal — ROI bloqueado */
-            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Análisis ROI</p>
-              <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-600">
-                <Lock className="w-8 h-8 opacity-30" />
-                <p className="text-sm text-center">El análisis ROI no está disponible para tu rol</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Columna derecha — Matriz mini + Chat ─────────── */}
-        <div className="space-y-5">
-
-          {/* Mini scatter plot de matriz */}
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
-              Posición visual en la Matriz
-            </p>
-            {latestEval ? (
-              <MatrixMiniPlot
-                impactScore={latestEval.impact_score}
-                effortScore={latestEval.effort_score}
-                quadrant={latestEval.quadrant as QuadrantKey}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-48 gap-2 text-slate-600">
-                <Target className="w-8 h-8 opacity-20" />
-                <p className="text-sm">Sin posición aún</p>
-              </div>
+            {project.description && (
+              <p className="text-slate-400 text-sm leading-relaxed mb-4">{project.description}</p>
             )}
+            <div className="flex items-center gap-4 text-xs text-slate-500">
+              <span className="flex items-center gap-1">
+                <ClipboardList size={12} />
+                {project.source === "list" ? "Microsoft Lists" : "Manual"}
+              </span>
+              <span className="flex items-center gap-1">
+                <Calendar size={12} />
+                {new Date(project.created_at).toLocaleDateString("es-CO")}
+              </span>
+            </div>
           </div>
+          {canEvaluate && (
+            <button
+              onClick={() => setEvaluating(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap"
+            >
+              <Target size={15} />
+              {latestEval ? "Re-evaluar" : "Evaluar"}
+            </button>
+          )}
+        </div>
+      </div>
 
-          {/* Chat */}
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-700/50">
-              <MessageCircle className="w-4 h-4 text-electric" />
-              <span className="text-sm font-medium text-slate-200">Canal de comunicación</span>
+      {/* Resultado en la Matriz */}
+      {latestEval && latestConfig && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn("glass-card p-6 border", latestConfig.bgClass)}
+        >
+          <p className="text-xs text-slate-400 uppercase tracking-wider mb-5">Posición actual en la Matriz</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+            <div className={cn("px-5 py-4 rounded-xl border w-fit shrink-0", latestConfig.bgClass, latestConfig.glowClass)}>
+              <p className={cn("text-2xl font-bold", latestConfig.textClass)}>{latestConfig.label}</p>
+              <p className="text-xs text-slate-400 mt-1">{latestConfig.description}</p>
             </div>
-            <div className="h-80">
-              <ProjectChat projectId={project.id} />
+            <div className="grid grid-cols-2 gap-4 flex-1">
+              <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <TrendingUp size={13} className="text-cyan-400" />
+                  <span className="text-xs text-slate-400">Impacto</span>
+                </div>
+                <p className="text-2xl font-bold text-cyan-400">
+                  {latestEval.impact_score.toFixed(0)}
+                  <span className="text-sm text-slate-500">/100</span>
+                </p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Zap size={13} className="text-indigo-400" />
+                  <span className="text-xs text-slate-400">Esfuerzo</span>
+                </div>
+                <p className="text-2xl font-bold text-indigo-400">
+                  {latestEval.effort_score.toFixed(0)}
+                  <span className="text-sm text-slate-500">/100</span>
+                </p>
+              </div>
             </div>
           </div>
+        </motion.div>
+      )}
+
+      {/* ROI */}
+      {canSeeROI && roiData && roiData.horas_proceso_actual > 0 && roiConfig && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn("glass-card p-6 border", roiConfig.bgClass, roiConfig.borderClass)}
+        >
+          <p className="text-xs text-slate-400 uppercase tracking-wider mb-5">Análisis de ROI</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+            <div className={cn("px-5 py-4 rounded-xl border w-fit shrink-0", roiConfig.bgClass, roiConfig.borderClass)}>
+              <p className={cn("text-2xl font-bold", roiConfig.textClass)}>{roiConfig.label}</p>
+              <p className="text-xs text-slate-400 mt-1">{roiConfig.action}</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1">
+              <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-2">ROI</p>
+                <p className={cn("text-xl font-bold", roiConfig.textClass)}>{roiData.roi_pct.toFixed(1)}%</p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-2">Horas antes</p>
+                <p className="text-xl font-bold text-white">{roiData.horas_proceso_actual.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-2">Horas nuevas</p>
+                <p className="text-xl font-bold text-blue-400">{(roiData.horas_proyectadas ?? (roiData.horas_proceso_actual - roiData.horas_ahorradas)).toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
+              </div>
+              <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
+                <p className="text-xs text-slate-400 mb-2">Horas ahorradas</p>
+                <p className="text-xl font-bold text-emerald-400">{roiData.horas_ahorradas.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Chat — ancho completo debajo */}
+      <div className="glass-card overflow-hidden">
+        <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-700/50">
+          <MessageCircle className="w-4 h-4 text-electric" />
+          <span className="text-sm font-medium text-slate-200">Canal de comunicación</span>
+        </div>
+        <div className="h-[500px]">
+          <ProjectChat projectId={project.id} />
         </div>
       </div>
 
@@ -296,31 +247,6 @@ export default function ProjectDetailPage() {
           onClose={() => { setEvaluating(false); fetchData() }}
         />
       )}
-    </div>
-  )
-}
-
-// ── Componentes locales ────────────────────────────────────────────────────────
-function MetricBox({
-  icon, label, value, barColor, barValue,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  barColor: string
-  barValue: number
-}) {
-  return (
-    <div className="bg-slate-800/60 rounded-lg p-3 space-y-2">
-      <div className="flex items-center gap-1.5">
-        {icon}
-        <span className="text-xs text-slate-400">{label}</span>
-      </div>
-      <p className="text-sm font-bold text-white">{value}</p>
-      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all", barColor)}
-          style={{ width: `${barValue}%` }} />
-      </div>
     </div>
   )
 }

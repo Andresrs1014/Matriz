@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react"
+import { toast } from "sonner"
 import api from "@/lib/api"
 import type { ROIRead, ROIParte1Input, ROIParte2Input, ROIPlotPoint } from "@/types/roi"
 
@@ -76,8 +77,10 @@ export function useROIPlot() {
     try {
       const res = await api.get<ROIPlotPoint[]>("/roi/plot/all")
       setRoiPlotPoints(res.data)
-    } catch {
+    } catch (e: any) {
       setRoiPlotPoints([])
+      const msg = e?.response?.data?.detail ?? "Error al cargar la matriz ROI"
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
