@@ -1,7 +1,7 @@
 // frontend/src/components/layout/Sidebar.tsx
 import { NavLink } from "react-router-dom"
 import {
-  FolderKanban, Target,
+  LayoutDashboard, FolderKanban, Target,
   Settings, LogOut, Zap,
 } from "lucide-react"
 import { useAuthStore } from "@/store/authStore"
@@ -13,6 +13,12 @@ export default function Sidebar() {
   const esUsuario = isUsuario(user)
 
   const navItems = [
+    {
+      to: "/dashboard",
+      icon: LayoutDashboard,
+      label: "Dashboard",
+      show: true,
+    },
     {
       to: esUsuario ? "/mis-proyectos" : "/projects",
       icon: FolderKanban,

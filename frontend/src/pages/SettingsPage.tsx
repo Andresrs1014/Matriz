@@ -153,23 +153,32 @@ function UsersTab({ currentUser }: { currentUser: User | null }) {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
+    if (form.password.length < 5) {
+      setError("La contraseña debe tener al menos 5 caracteres.")
+      return
+    }
     setCreating(true)
     setError(null)
     try {
       await api.post("/auth/register", {
-        email: form.email, full_name: form.full_name,
-        password: form.password, area: form.area || undefined,
+        email: form.email,
+        full_name: form.full_name,
+        password: form.password,
+        area: form.area || undefined,
+        role: form.role,
       })
-      if (form.role !== "usuario") {
-        const res    = await api.get<User[]>("/auth/users")
-        const created = res.data.find(u => u.email === form.email)
-        if (created) await api.put(`/auth/users/${created.id}/role`, { role: form.role })
-      }
+      // Éxito: cerrar formulario antes de recargar
       setShowCreate(false)
       setForm({ email: "", full_name: "", password: "", role: "usuario", area: "" })
-      fetchAll()
+      // Recargar lista — error aquí no afecta el éxito de la creación
+      try { await fetchAll() } catch { setError("Usuario creado. No se pudo recargar la lista, recarga la página.") }
     } catch (e: any) {
-      setError(e.response?.data?.detail ?? "Error al crear usuario.")
+      const detail = e.response?.data?.detail
+      if (Array.isArray(detail)) {
+        setError(detail[0]?.msg ?? "Error de validación al crear usuario.")
+      } else {
+        setError(detail ?? "Error al crear usuario.")
+      }
     } finally {
       setCreating(false)
     }
@@ -248,9 +257,10 @@ function UsersTab({ currentUser }: { currentUser: User | null }) {
               <input placeholder="Email" type="email" required value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 className="px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric" />
-              <input placeholder="Contraseña" type="password" required value={form.password}
+              <input placeholder="Contraseña" type="password" required minLength={5} value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 className="px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric" />
+              <p className="text-[11px] text-slate-500 -mt-1 sm:col-span-2">Mínimo 5 caracteres</p>
               <input placeholder="Área (opcional)" value={form.area}
                 onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
                 className="px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric" />

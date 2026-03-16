@@ -4,7 +4,6 @@ import { motion } from "framer-motion"
 import { Zap, Eye, EyeOff, LogIn } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
-import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const navigate   = useNavigate()
@@ -42,8 +41,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-navy-950 flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
 
+      {/* Fondo — imagen ZYMO */}
+      <div className="absolute inset-0">
+        <img
+          src="/zymo.png"
+          alt=""
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay oscuro para legibilidad */}
+        <div className="absolute inset-0 bg-navy-950/70 backdrop-blur-sm" />
+      </div>
+
+      {/* Líneas decorativas */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="laser-line-h absolute top-1/3 left-0 right-0 opacity-20" />
         <div className="laser-line-h absolute top-2/3 left-0 right-0 opacity-10" />
@@ -57,7 +68,8 @@ export default function LoginPage() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-md relative z-10"
       >
-        <div className="glass-card p-8">
+        {/* Formulario */}
+        <div className="glass-card w-full p-8 rounded-2xl">
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 rounded-2xl bg-electric/20 border border-electric/40 flex items-center justify-center shadow-glow-blue mb-4">
               <Zap size={28} className="text-electric" />
@@ -130,10 +142,11 @@ export default function LoginPage() {
 
         </div>
 
-        <p className="text-center text-xs text-slate-600 mt-6">
-          Project Matrix Beta — Gestión inteligente de proyectos
-        </p>
       </motion.div>
+
+      <p className="absolute bottom-4 text-center text-xs text-white/30 w-full z-10">
+        Project Matrix Beta — Gestión inteligente de proyectos
+      </p>
     </div>
   )
 }
