@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, col
 from datetime import datetime, timezone
-
 from app.core.dependencies import (
     get_db, get_current_user,
     require_admin, require_superadmin,
@@ -23,7 +22,9 @@ from app.services.project_service import (
     aprobacion_final, rechazar_proyecto,
 )
 from app.services.comment_service import create_status_comment
-from app.services.roi_service import _calcular_valor_hora, assign_roi_quadrant
+from app.services.roi_service import (
+    _calcular_valor_hora, assign_roi_quadrant, completar_roi_calculo  # ← añadido
+)
 from app.core.ws_manager import ws_manager
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -49,7 +50,6 @@ def _to_read(p: Project) -> ProjectRead:
 
 
 # ── CRUD base ────────────────────────────────────────────────────────────────
-
 @router.get("", response_model=list[ProjectRead])
 def list_projects(
     db: Session = Depends(get_db),
@@ -125,7 +125,6 @@ def delete_project_endpoint(
 
 
 # ── Flujo Paso 1: Admin escala al superadmin ─────────────────────────────────
-
 @router.post("/{project_id}/escalar", response_model=ProjectRead)
 async def escalar(
     project_id: int,
@@ -149,7 +148,6 @@ async def escalar(
 
 
 # ── Flujo Paso 2: Superadmin aprueba + asigna preguntas ──────────────────────
-
 @router.post("/{project_id}/superaprobar", response_model=ProjectRead)
 async def superaprobar(
     project_id: int,
@@ -163,8 +161,7 @@ async def superaprobar(
     """
     project = get_project_any(db, project_id)
     project = superaprobar_proyecto(db, project, current_user)
-
-    assert current_user.id is not None  # guard para type checker
+    assert current_user.id is not None
 
     # Limpiar preguntas previas del proyecto (por si se llama más de una vez)
     existing_pqs = list(db.exec(
@@ -175,29 +172,36 @@ async def superaprobar(
 
     # Preguntas existentes seleccionadas por el superadmin
     for qid in payload.question_ids:
-        from app.models.matrix import MatrixQuestion  # ← CORREGIDO: nombre real
+        from app.models.matrix import MatrixQuestion
         mq = db.get(MatrixQuestion, qid)
         if mq:
             db.add(ProjectQuestion(
                 project_id=project_id,
                 question_text=mq.text,
+                axis=mq.axis,           # ← CORREGIDO: heredar el eje de MatrixQuestion
                 source_question_id=qid,
                 created_by=current_user.id,
             ))
 
     # Preguntas custom nuevas escritas por el superadmin
-    for text in payload.custom_questions:
-        if text.strip():
+    for item in payload.custom_questions:
+        # Soporta tanto objetos como strings
+        text = getattr(item, "text", item)
+        axis = getattr(item, "axis", "impact")
+        if str(text).strip():
             db.add(ProjectQuestion(
                 project_id=project_id,
-                question_text=text.strip(),
+                question_text=str(text).strip(),
+                axis=axis,
                 source_question_id=None,
                 created_by=current_user.id,
             ))
 
     db.commit()
-
-    total = len(payload.question_ids) + len([t for t in payload.custom_questions if t.strip()])
+    total = len(payload.question_ids) + len([
+        x for x in payload.custom_questions
+        if (getattr(x, "text", x)).strip()
+    ])
     sc = create_status_comment(
         db, project_id, current_user,
         f"Proyecto aprobado por superadmin. {total} pregunta(s) asignadas para evaluación."
@@ -212,7 +216,6 @@ async def superaprobar(
 
 
 # ── GET preguntas asignadas al proyecto ──────────────────────────────────────
-
 @router.get("/{project_id}/questions", response_model=list[ProjectQuestionRead])
 def get_project_questions(
     project_id: int,
@@ -234,7 +237,6 @@ def get_project_questions(
 
 
 # ── Flujo Paso 3: Admin inicia evaluación ────────────────────────────────────
-
 @router.post("/{project_id}/iniciar-evaluacion", response_model=ProjectRead)
 async def iniciar_eval(
     project_id: int,
@@ -243,8 +245,6 @@ async def iniciar_eval(
 ):
     """Paso 3 — Admin inicia la evaluación con las preguntas asignadas."""
     project = get_project_any(db, project_id)
-
-    # Verificar que haya preguntas asignadas antes de iniciar
     questions = list(db.exec(
         select(ProjectQuestion).where(ProjectQuestion.project_id == project_id)
     ).all())
@@ -253,7 +253,6 @@ async def iniciar_eval(
             status_code=400,
             detail="No hay preguntas asignadas. El superadmin debe aprobar y asignar preguntas primero."
         )
-
     project = iniciar_evaluacion(db, project)
     sc = create_status_comment(
         db, project_id, current_user,
@@ -269,7 +268,6 @@ async def iniciar_eval(
 
 
 # ── Flujo Paso 4: Admin marca evaluado (tras llenar matrix) ──────────────────
-
 @router.post("/{project_id}/marcar-evaluado", response_model=ProjectRead)
 async def marcar_eval(
     project_id: int,
@@ -296,7 +294,6 @@ async def marcar_eval(
 
 
 # ── Flujo Paso 5: Superadmin provee salario ───────────────────────────────────
-
 @router.post("/{project_id}/proveer-salario", response_model=ProjectRead)
 async def proveer_salario(
     project_id: int,
@@ -310,12 +307,9 @@ async def proveer_salario(
     Crea el registro ROIEvaluation con los datos económicos.
     """
     project = get_project_any(db, project_id)
-
-    # Verificar que no exista ya un ROI para este proyecto
     existing = db.exec(select(ROIEvaluation).where(ROIEvaluation.project_id == project_id)).first()
     if existing:
         raise HTTPException(status_code=400, detail="El salario ya fue registrado para este proyecto.")
-
     valores = _calcular_valor_hora(payload.salario_base)
     roi = ROIEvaluation(
         project_id=project_id,
@@ -329,11 +323,10 @@ async def proveer_salario(
     )
     db.add(roi)
     db.commit()
-
     project = registrar_salario(db, project)
     sc = create_status_comment(
         db, project_id, current_user,
-        f"Datos salariales registrados por superadmin. Pendiente datos operacionales del admin."
+        "Datos salariales registrados por superadmin. Pendiente datos operacionales del admin."
     )
     await ws_manager.broadcast("comment.created", {
         "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
@@ -344,8 +337,44 @@ async def proveer_salario(
     return _to_read(project)
 
 
-# ── Flujo Paso 6: Admin completa datos operacionales + calcula ROI ────────────
+# ── NUEVO: Superadmin corrige salario mal ingresado ───────────────────────────
+@router.patch("/{project_id}/corregir-salario", response_model=dict)
+async def corregir_salario(
+    project_id: int,
+    payload: SalarioInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    Corrección de salario por superadmin si fue ingresado con error.
+    Solo disponible en estado pendiente_salario.
+    """
+    project = db.get(Project, project_id)
+    if not project or project.status != "pendiente_salario":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede corregir el salario cuando el proyecto está en estado pendiente_salario."
+        )
+    roi = db.exec(select(ROIEvaluation).where(ROIEvaluation.project_id == project_id)).first()
+    if not roi:
+        raise HTTPException(status_code=404, detail="No existe registro ROI para este proyecto.")
+    valores = _calcular_valor_hora(payload.salario_base)
+    roi.salario_base = payload.salario_base
+    roi.cargo = payload.cargo
+    roi.sede = payload.sede or "No especificada"
+    roi.valor_quincena = valores["valor_quincena"]
+    roi.valor_dia = valores["valor_dia"]
+    roi.valor_hora_hombre = valores["valor_hora_hombre"]
+    db.add(roi)
+    db.commit()
+    return {
+        "message": "Salario corregido correctamente.",
+        "valor_hora_hombre": roi.valor_hora_hombre,
+        "valor_dia": roi.valor_dia,
+    }
 
+
+# ── Flujo Paso 6: Admin completa datos operacionales + calcula ROI ────────────
 @router.post("/{project_id}/completar-roi", response_model=ProjectRead)
 async def completar_roi(
     project_id: int,
@@ -358,7 +387,6 @@ async def completar_roi(
     El sistema calcula automáticamente el ROI en horas hombre y cierra el flujo.
     """
     project = get_project_any(db, project_id)
-
     roi = db.exec(select(ROIEvaluation).where(ROIEvaluation.project_id == project_id)).first()
     if not roi:
         raise HTTPException(
@@ -366,32 +394,17 @@ async def completar_roi(
             detail="El superadmin debe registrar el salario antes de completar el ROI."
         )
 
-    # Calcular ahorro en horas hombre
-    horas_ahorradas = round(payload.horas_proceso_actual - payload.horas_proceso_nuevo, 2)
-    ahorro_horas_hombre = round(horas_ahorradas * payload.num_personas, 2)
-    valor_ahorro = round(ahorro_horas_hombre * roi.valor_hora_hombre, 2)
-    roi_pct = round(
-        (horas_ahorradas / payload.horas_proceso_actual) * 100, 2
-    ) if payload.horas_proceso_actual > 0 else 0.0
-    roi_valor = round(horas_ahorradas * roi.valor_hora_hombre, 2)
+    # ← CORREGIDO: delegar a roi_service, sin cálculo inline duplicado
+    roi = completar_roi_calculo(
+        roi=roi,
+        num_personas=payload.num_personas,
+        horas_proceso_actual=payload.horas_proceso_actual,
+        horas_proceso_nuevo=payload.horas_proceso_nuevo,
+        db=db,
+    )
 
-    # Actualizar ROI con datos operacionales y resultado del cálculo
-    roi.num_personas = payload.num_personas
-    roi.horas_proceso_actual = payload.horas_proceso_actual
-    roi.horas_proceso_nuevo = payload.horas_proceso_nuevo
-    roi.horas_ahorradas = horas_ahorradas
-    roi.ahorro_horas_hombre = ahorro_horas_hombre
-    roi.valor_ahorro = valor_ahorro
-    roi.roi_valor = roi_valor
-    roi.roi_valor_total = valor_ahorro
-    roi.roi_pct = roi_pct
-    roi.cuadrante_roi = assign_roi_quadrant(horas_ahorradas, valor_ahorro)
-    db.add(roi)
-
-    # Avanzar estado a calculando_roi
+    # Avanzar estados y cerrar flujo
     project = iniciar_calculo_roi(db, project)
-
-    # Cerrar flujo automáticamente
     project = aprobacion_final(db, project, current_user)
     db.commit()
 
@@ -399,8 +412,8 @@ async def completar_roi(
     sc = create_status_comment(
         db, project_id, current_user,
         f"ROI calculado por {current_user.full_name or current_user.email}. "
-        f"Ahorro: {horas_ahorradas:.1f}h × {payload.num_personas} personas = "
-        f"{ahorro_horas_hombre:.1f} h/h ahorradas. {obs}"
+        f"Ahorro: {roi.horas_ahorradas:.1f}h × {roi.num_personas} personas = "
+        f"{roi.ahorro_horas_hombre:.1f} h/h ahorradas. {obs}"
     )
     await ws_manager.broadcast("comment.created", {
         "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
@@ -412,7 +425,6 @@ async def completar_roi(
 
 
 # ── Rechazar (cualquier paso) ────────────────────────────────────────────────
-
 @router.post("/{project_id}/rechazar", response_model=ProjectRead)
 async def rechazar(
     project_id: int,
