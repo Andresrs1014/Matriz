@@ -62,7 +62,6 @@ def submit_parte2(
             status_code=404,
             detail="Primero el superadmin debe completar la Parte 1 del ROI."
         )
-    # ← CORREGIDO: horas_proyectadas (nombre real en schema), num_personas viene de parte1
     if data.horas_proyectadas >= data.horas_proceso_actual:
         raise HTTPException(
             status_code=422,
@@ -71,7 +70,7 @@ def submit_parte2(
     parte1 = ROIParte1Input(
         cargo=existing.cargo,
         sede=existing.sede,
-        num_personas=existing.num_personas,     # ← CORREGIDO: viene del registro existente
+        num_personas=existing.num_personas,
         salario_base=existing.salario_base,
     )
     return update_roi_parte2(db, existing, parte1, data)

@@ -23,7 +23,7 @@ from app.services.project_service import (
     aprobacion_final, rechazar_proyecto,
 )
 from app.services.comment_service import create_status_comment
-from app.services.roi_service import _calcular_valor_hora
+from app.services.roi_service import _calcular_valor_hora, assign_roi_quadrant
 from app.core.ws_manager import ws_manager
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -165,6 +165,13 @@ async def superaprobar(
     project = superaprobar_proyecto(db, project, current_user)
 
     assert current_user.id is not None  # guard para type checker
+
+    # Limpiar preguntas previas del proyecto (por si se llama más de una vez)
+    existing_pqs = list(db.exec(
+        select(ProjectQuestion).where(ProjectQuestion.project_id == project_id)
+    ))
+    for pq in existing_pqs:
+        db.delete(pq)
 
     # Preguntas existentes seleccionadas por el superadmin
     for qid in payload.question_ids:
@@ -360,9 +367,13 @@ async def completar_roi(
         )
 
     # Calcular ahorro en horas hombre
-    horas_ahorradas = payload.horas_proceso_actual - payload.horas_proceso_nuevo
-    ahorro_horas_hombre = horas_ahorradas * payload.num_personas  # horas totales ahorradas por ciclo
-    valor_ahorro = ahorro_horas_hombre * roi.valor_hora_hombre
+    horas_ahorradas = round(payload.horas_proceso_actual - payload.horas_proceso_nuevo, 2)
+    ahorro_horas_hombre = round(horas_ahorradas * payload.num_personas, 2)
+    valor_ahorro = round(ahorro_horas_hombre * roi.valor_hora_hombre, 2)
+    roi_pct = round(
+        (horas_ahorradas / payload.horas_proceso_actual) * 100, 2
+    ) if payload.horas_proceso_actual > 0 else 0.0
+    roi_valor = round(horas_ahorradas * roi.valor_hora_hombre, 2)
 
     # Actualizar ROI con datos operacionales y resultado del cálculo
     roi.num_personas = payload.num_personas
@@ -371,6 +382,10 @@ async def completar_roi(
     roi.horas_ahorradas = horas_ahorradas
     roi.ahorro_horas_hombre = ahorro_horas_hombre
     roi.valor_ahorro = valor_ahorro
+    roi.roi_valor = roi_valor
+    roi.roi_valor_total = valor_ahorro
+    roi.roi_pct = roi_pct
+    roi.cuadrante_roi = assign_roi_quadrant(horas_ahorradas, valor_ahorro)
     db.add(roi)
 
     # Avanzar estado a calculando_roi

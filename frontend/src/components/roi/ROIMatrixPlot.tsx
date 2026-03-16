@@ -9,18 +9,22 @@ interface Props {
   onSelect:   (p: ROIPlotPoint) => void
 }
 
+
 const W   = 560
 const H   = 480
 const PAD = 48
 
-const ROI_PCT_UMBRAL  = 50
-const HORAS_UMBRAL    = 4
-const MAX_ROI_SCALE   = ROI_PCT_UMBRAL * 2
-const MAX_HORAS_SCALE = HORAS_UMBRAL * 2
+const HORAS_UMBRAL    = 4          // línea horizontal al 50 % de 8 h
+const VALOR_UMBRAL    = 250_000    // línea vertical al 50 % de 500 K
+const MAX_VALOR_SCALE = 500_000    // escala fija eje X: 0–500 K COP
+const MAX_HORAS_SCALE = 8          // escala fija eje Y: 0–8 h
 
 const LABEL_STYLE = {
-  fontSize: 11, fontWeight: 700, fill: "#64748b", letterSpacing: "0.08em"
-} as const
+  fontSize: 11,
+  fontWeight: 700,
+  fill: "#64748b",
+  letterSpacing: "0.08em"
+}
 
 const QUAD_COLORS = {
   proceso_pesado:   { fill: "rgba(251,191,36,0.04)",  stroke: "rgba(251,191,36,0.12)"  },
@@ -38,19 +42,26 @@ function fmtCOP(n: number) {
   }).format(n)
 }
 
+function fmtTick(v: number) {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `${Math.round(v / 1_000)}K`
+  return `${v}`
+}
+
 export default function ROIMatrixPlot({ points, selectedId, onSelect }: Props) {
   const [hovered, setHovered] = useState<number | null>(null)
 
-  const maxRoi   = Math.max(...points.map(p => p.roi_pct),          MAX_ROI_SCALE)
-  const maxHoras = Math.max(...points.map(p => p.horas_ahorradas),  MAX_HORAS_SCALE)
+  // Escala fija — las líneas nunca se mueven independientemente de los datos
+  const maxValor = MAX_VALOR_SCALE
+  const maxHoras = MAX_HORAS_SCALE
 
-  const umbralXScore = (ROI_PCT_UMBRAL / maxRoi)   * 100
-  const umbralYScore = (HORAS_UMBRAL   / maxHoras) * 100
+  const umbralXScore = (VALOR_UMBRAL / maxValor) * 100
+  const umbralYScore = (HORAS_UMBRAL / maxHoras) * 100
   const umbralXpx    = scoreToX(umbralXScore)
   const umbralYpx    = scoreToY(umbralYScore)
 
   const xTicks = Array.from({ length: 6 }, (_, i) =>
-    parseFloat(((maxRoi   / 5) * i).toFixed(1))
+    Math.round((maxValor / 5) * i)
   )
   const yTicks = Array.from({ length: 6 }, (_, i) =>
     parseFloat(((maxHoras / 5) * i).toFixed(1))
@@ -62,54 +73,32 @@ export default function ROIMatrixPlot({ points, selectedId, onSelect }: Props) {
         viewBox={`0 0 ${W} ${H}`}
         className="w-full max-w-2xl mx-auto"
         style={{ minWidth: 320 }}
+        overflow="visible"
       >
         {/* ── Fondos de cuadrante ── */}
-        {/* proceso_pesado: top-left */}
-        <rect
-          x={PAD} y={PAD}
-          width={umbralXpx - PAD} height={umbralYpx - PAD}
-          fill={QUAD_COLORS.proceso_pesado.fill}
-          stroke={QUAD_COLORS.proceso_pesado.stroke}
-          strokeWidth={1} rx={8}
-        />
-        {/* alto_impacto: top-right */}
-        <rect
-          x={umbralXpx} y={PAD}
-          width={W - umbralXpx - PAD} height={umbralYpx - PAD}
-          fill={QUAD_COLORS.alto_impacto.fill}
-          stroke={QUAD_COLORS.alto_impacto.stroke}
-          strokeWidth={1} rx={8}
-        />
-        {/* bajo_impacto: bot-left */}
-        <rect
-          x={PAD} y={umbralYpx}
-          width={umbralXpx - PAD} height={H - umbralYpx - PAD}
-          fill={QUAD_COLORS.bajo_impacto.fill}
-          stroke={QUAD_COLORS.bajo_impacto.stroke}
-          strokeWidth={1} rx={8}
-        />
-        {/* eficiencia_menor: bot-right */}
-        <rect
-          x={umbralXpx} y={umbralYpx}
-          width={W - umbralXpx - PAD} height={H - umbralYpx - PAD}
-          fill={QUAD_COLORS.eficiencia_menor.fill}
-          stroke={QUAD_COLORS.eficiencia_menor.stroke}
-          strokeWidth={1} rx={8}
-        />
+        <rect x={PAD} y={PAD} width={umbralXpx - PAD} height={umbralYpx - PAD} fill={QUAD_COLORS.proceso_pesado.fill} stroke={QUAD_COLORS.proceso_pesado.stroke} strokeWidth={1} rx={8} />
+        <rect x={umbralXpx} y={PAD} width={W - umbralXpx - PAD} height={umbralYpx - PAD} fill={QUAD_COLORS.alto_impacto.fill} stroke={QUAD_COLORS.alto_impacto.stroke} strokeWidth={1} rx={8} />
+        <rect x={PAD} y={umbralYpx} width={umbralXpx - PAD} height={H - umbralYpx - PAD} fill={QUAD_COLORS.bajo_impacto.fill} stroke={QUAD_COLORS.bajo_impacto.stroke} strokeWidth={1} rx={8} />
+        <rect x={umbralXpx} y={umbralYpx} width={W - umbralXpx - PAD} height={H - umbralYpx - PAD} fill={QUAD_COLORS.eficiencia_menor.fill} stroke={QUAD_COLORS.eficiencia_menor.stroke} strokeWidth={1} rx={8} />
 
         {/* ── Ejes con glow azul ── */}
-        <line
-          x1={umbralXpx} y1={PAD - 10}
-          x2={umbralXpx} y2={H - PAD + 10}
-          stroke="#3b82f6" strokeWidth={1.5}
-          style={{ filter: "drop-shadow(0 0 4px rgba(59,130,246,0.7))" }}
-        />
-        <line
-          x1={PAD - 10}  y1={umbralYpx}
-          x2={W - PAD + 10} y2={umbralYpx}
-          stroke="#3b82f6" strokeWidth={1.5}
-          style={{ filter: "drop-shadow(0 0 4px rgba(59,130,246,0.7))" }}
-        />
+        <line x1={umbralXpx} y1={PAD - 10} x2={umbralXpx} y2={H - PAD + 10} stroke="#3b82f6" strokeWidth={1.5} style={{ filter: "drop-shadow(0 0 4px rgba(59,130,246,0.7))" }} />
+        <line x1={PAD - 10} y1={umbralYpx} x2={W - PAD + 10} y2={umbralYpx} stroke="#3b82f6" strokeWidth={1.5} style={{ filter: "drop-shadow(0 0 4px rgba(59,130,246,0.7))" }} />
+
+        {/* Flechas de ejes */}
+        <polygon points={`${umbralXpx},${PAD - 18} ${umbralXpx - 5},${PAD - 8} ${umbralXpx + 5},${PAD - 8}`} fill="#3b82f6" />
+        <polygon points={`${umbralXpx},${H - PAD + 18} ${umbralXpx - 5},${H - PAD + 8} ${umbralXpx + 5},${H - PAD + 8}`} fill="#3b82f6" />
+        <polygon points={`${W - PAD + 18},${umbralYpx} ${W - PAD + 8},${umbralYpx - 5} ${W - PAD + 8},${umbralYpx + 5}`} fill="#3b82f6" />
+        <polygon points={`${PAD - 18},${umbralYpx} ${PAD - 8},${umbralYpx - 5} ${PAD - 8},${umbralYpx + 5}`} fill="#3b82f6" />
+
+        {/* Labels de ejes */}
+        <text x={W / 2} y={20} textAnchor="middle" {...LABEL_STYLE} fill="#94a3b8">ALTO AHORRO</text>
+        <text x={W / 2} y={H - 8} textAnchor="middle" {...LABEL_STYLE} fill="#94a3b8">BAJO AHORRO</text>
+        <text x={16} y={H / 2 + 4} textAnchor="middle" {...LABEL_STYLE} fill="#94a3b8" transform={`rotate(-90, 16, ${H / 2})`}>BAJO VALOR</text>
+        <text x={W - 16} y={H / 2 + 4} textAnchor="middle" {...LABEL_STYLE} fill="#94a3b8" transform={`rotate(90, ${W - 16}, ${H / 2})`}>ALTO VALOR</text>
+
+        {/* Labels de cuadrantes */}
+        {/* (Eliminados duplicados de labels de cuadrantes) */}
 
         {/* ── Flechas de ejes ── */}
         <polygon points={`${umbralXpx},${PAD - 18} ${umbralXpx - 5},${PAD - 8} ${umbralXpx + 5},${PAD - 8}`}    fill="#3b82f6" />
@@ -118,26 +107,21 @@ export default function ROIMatrixPlot({ points, selectedId, onSelect }: Props) {
         <polygon points={`${PAD - 18},${umbralYpx} ${PAD - 8},${umbralYpx - 5} ${PAD - 8},${umbralYpx + 5}`}    fill="#3b82f6" />
 
         {/* ── Labels de ejes ── */}
-        <text x={umbralXpx} y={12}         textAnchor="middle" {...LABEL_STYLE}>ALTO AHORRO</text>
-        <text x={umbralXpx} y={H - 4}      textAnchor="middle" {...LABEL_STYLE}>BAJO AHORRO</text>
-        <text x={8}         y={umbralYpx + 4} textAnchor="middle" {...LABEL_STYLE}
-          transform={`rotate(-90, 8, ${umbralYpx})`}>BAJO ROI</text>
-        <text x={W - 8}     y={umbralYpx + 4} textAnchor="middle" {...LABEL_STYLE}
-          transform={`rotate(90, ${W - 8}, ${umbralYpx})`}>ALTO ROI</text>
+        {/* (Eliminados duplicados de labels de ejes) */}
 
-        {/* ── Labels de cuadrantes ── */}
-        <text x={PAD + 10}        y={PAD + 22} fontSize={11} fontWeight={700} fill="rgba(251,191,36,0.6)">PROCESO PESADO</text>
-        <text x={umbralXpx + 10}  y={PAD + 22} fontSize={11} fontWeight={700} fill="rgba(52,211,153,0.6)">ALTO IMPACTO</text>
-        <text x={PAD + 10}        y={H - PAD - 10} fontSize={11} fontWeight={700} fill="rgba(148,163,184,0.5)">BAJO IMPACTO</text>
-        <text x={umbralXpx + 10}  y={H - PAD - 10} fontSize={11} fontWeight={700} fill="rgba(129,140,248,0.6)">EFICIENCIA MENOR</text>
+        {/* ── Labels de cuadrantes — centrados en cada cuadrante ── */}
+        <text x={(PAD + umbralXpx) / 2}     y={PAD + 22} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(251,191,36,0.6)">PROCESO PESADO</text>
+        <text x={(umbralXpx + W - PAD) / 2} y={PAD + 22} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(52,211,153,0.6)">ALTO IMPACTO</text>
+        <text x={(PAD + umbralXpx) / 2}     y={H - PAD - 10} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(148,163,184,0.5)">BAJO IMPACTO</text>
+        <text x={(umbralXpx + W - PAD) / 2} y={H - PAD - 10} textAnchor="middle" fontSize={11} fontWeight={700} fill="rgba(129,140,248,0.6)">EFICIENCIA MENOR</text>
 
-        {/* ── Ticks eje X (ROI %) ── */}
+        {/* ── Ticks eje X (Valor COP) ── */}
         {xTicks.map((v) => {
-          const x = scoreToX((v / maxRoi) * 100)
+          const x = scoreToX((v / maxValor) * 100)
           return (
             <g key={`xt-${v}`}>
               <line x1={x} y1={H - PAD} x2={x} y2={H - PAD + 4} stroke="#374151" />
-              <text x={x} y={H - PAD + 14} textAnchor="middle" fontSize="8" fill="#475569">{v}%</text>
+              <text x={x} y={H - PAD + 14} textAnchor="middle" fontSize="8" fill="#475569">{fmtTick(v)}</text>
             </g>
           )
         })}
@@ -155,11 +139,11 @@ export default function ROIMatrixPlot({ points, selectedId, onSelect }: Props) {
 
         {/* ── Burbujas ── */}
         {points.map((p, i) => {
-          const xScore   = (p.roi_pct         / maxRoi)   * 100
+          const xScore   = (p.roi_valor_total  / maxValor) * 100
           const yScore   = (p.horas_ahorradas  / maxHoras) * 100
           const x        = scoreToX(Math.min(xScore, 98))
           const y        = scoreToY(Math.min(Math.max(yScore, 2), 98))
-          const c        = ROI_QUADRANT_CONFIG[p.cuadrante_roi]
+          const c        = ROI_QUADRANT_CONFIG[p.cuadrante_roi] ?? ROI_QUADRANT_CONFIG.bajo_impacto
           const isHov    = hovered === i
           const isSel    = p.roi_id === selectedId
 
@@ -197,9 +181,13 @@ export default function ROIMatrixPlot({ points, selectedId, onSelect }: Props) {
                 {p.project_title.charAt(0).toUpperCase()}
               </text>
 
-              {/* Tooltip hover */}
+              {/* Tooltip hover — se ajusta para no salir del SVG */}
               {isHov && (
-                <foreignObject x={x - 100} y={y - 108} width="200" height="105">
+                <foreignObject
+                  x={x - 100 < PAD ? PAD : x + 100 > W - PAD ? W - PAD - 200 : x - 100}
+                  y={y - 108 < PAD ? y + 20 : y - 108}
+                  width="200" height="105"
+                >
                   <div style={{
                     background: "#0f1c2e",
                     border: `1px solid ${c.color}50`,

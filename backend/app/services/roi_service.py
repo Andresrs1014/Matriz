@@ -6,8 +6,8 @@ from app.models.project import Project
 from app.models.roi import ROIEvaluation
 from app.schemas.roi import ROIParte1Input, ROIParte2Input, ROIPlotPoint
 
-ROI_PCT_UMBRAL = 50.0
 HORAS_UMBRAL = 4.0
+VALOR_UMBRAL = 50_000.0   # COP — umbral de ahorro en dinero para cuadrante "alto valor"
 
 
 def _calcular_valor_hora(salario_base: float) -> dict:
@@ -18,12 +18,13 @@ def _calcular_valor_hora(salario_base: float) -> dict:
     }
 
 
-def assign_roi_quadrant(roi_pct: float, horas_ahorradas: float) -> str:
-    alto_roi    = roi_pct >= ROI_PCT_UMBRAL
-    ahorra_bien = horas_ahorradas >= HORAS_UMBRAL
-    if alto_roi and ahorra_bien:      return "alto_impacto"
-    if not alto_roi and ahorra_bien:  return "proceso_pesado"
-    if alto_roi and not ahorra_bien:  return "eficiencia_menor"
+def assign_roi_quadrant(horas_ahorradas: float, roi_valor_total: float) -> str:
+    """Cuadrante basado en horas hombre reales ahorradas y su valor en COP."""
+    ahorra_horas = horas_ahorradas >= HORAS_UMBRAL
+    ahorra_valor = roi_valor_total >= VALOR_UMBRAL
+    if ahorra_horas and ahorra_valor:      return "alto_impacto"
+    if ahorra_horas and not ahorra_valor:  return "proceso_pesado"
+    if not ahorra_horas and ahorra_valor:  return "eficiencia_menor"
     return "bajo_impacto"
 
 
@@ -31,7 +32,6 @@ def calculate_roi(parte1: ROIParte1Input, parte2: ROIParte2Input) -> dict:
     valores = _calcular_valor_hora(parte1.salario_base)
     valor_hora = valores["valor_hora_hombre"]
 
-    # ← CORREGIDO: usa horas_proyectadas (nombre real en ROIParte2Input)
     horas_ahorradas      = round(parte2.horas_proceso_actual - parte2.horas_proyectadas, 2)
     ahorro_horas_hombre  = round(horas_ahorradas * parte1.num_personas, 2)
     valor_ahorro         = round(ahorro_horas_hombre * valor_hora, 2)
@@ -49,7 +49,7 @@ def calculate_roi(parte1: ROIParte1Input, parte2: ROIParte2Input) -> dict:
         "roi_valor":           roi_valor,
         "roi_valor_total":     roi_valor_total,
         "roi_pct":             roi_pct,
-        "cuadrante_roi":       assign_roi_quadrant(roi_pct, horas_ahorradas),
+        "cuadrante_roi":       assign_roi_quadrant(horas_ahorradas, roi_valor_total),
     }
 
 
@@ -79,7 +79,6 @@ def update_roi_parte2(
 
     evaluation.num_personas         = parte1.num_personas
     evaluation.horas_proceso_actual = parte2.horas_proceso_actual
-    # ← CORREGIDO: asigna horas_proyectadas al campo del modelo
     evaluation.horas_proceso_nuevo  = parte2.horas_proyectadas
     evaluation.horas_ahorradas      = calculated["horas_ahorradas"]
     evaluation.ahorro_horas_hombre  = calculated["ahorro_horas_hombre"]

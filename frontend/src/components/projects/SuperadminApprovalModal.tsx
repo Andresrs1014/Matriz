@@ -42,6 +42,7 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
   // ── List step ──────────────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>("list")
   const [categories, setCategories] = useState<Category[]>([])
+  const [questionCounts, setQuestionCounts] = useState<Record<number, number>>({})
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [loadingCats, setLoadingCats] = useState(true)
 
@@ -59,8 +60,16 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
   async function loadCategories() {
     setLoadingCats(true)
     try {
-      const { data } = await api.get("/matrix/categories")
-      setCategories(data)
+      const [{ data: cats }, { data: questions }] = await Promise.all([
+        api.get("/matrix/categories"),
+        api.get("/matrix/questions"),
+      ])
+      const counts: Record<number, number> = {}
+      questions.forEach((q: any) => {
+        counts[q.category_id] = (counts[q.category_id] ?? 0) + 1
+      })
+      setCategories(cats)
+      setQuestionCounts(counts)
     } finally {
       setLoadingCats(false)
     }
@@ -216,6 +225,9 @@ export default function SuperadminApprovalModal({ projectId, projectTitle, onClo
                             {cat.description && (
                               <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{cat.description}</p>
                             )}
+                            <p className="text-[10px] text-slate-600 mt-0.5">
+                              {questionCounts[cat.id] ?? 0} pregunta{(questionCounts[cat.id] ?? 0) !== 1 ? "s" : ""}
+                            </p>
                           </div>
                           {selected && <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />}
                         </button>

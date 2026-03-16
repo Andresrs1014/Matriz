@@ -1,7 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-SEDES = ["IMCCARGO", "LOGIMAT", "IMCDEPOSITO"]
+SEDES = ["LOGIMAT", "LOGIMAT B2", "IMC CARGO", "IMC DEPOSITO"]
 
 
 # ── Parte 1 — la llena el jefe ───────────────────────────────────────────────
@@ -34,7 +34,7 @@ class ROIRead(BaseModel):
 
     # Parte 2
     horas_proceso_actual: float
-    horas_proyectadas: float
+    horas_proyectadas: float = Field(alias="horas_proceso_nuevo")
 
     # Calculados
     horas_ahorradas: float
@@ -44,7 +44,7 @@ class ROIRead(BaseModel):
     cuadrante_roi: str
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 # ── Para la matriz ROI ────────────────────────────────────────────────────────

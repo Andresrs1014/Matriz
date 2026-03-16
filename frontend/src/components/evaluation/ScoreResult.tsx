@@ -2,6 +2,7 @@ import { motion } from "framer-motion"
 import { CheckCircle, TrendingUp, Zap } from "lucide-react"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
 import { cn } from "@/lib/utils"
+import { useNavigate } from "react-router-dom"
 
 interface ScoreResultProps {
   impactScore: number
@@ -13,6 +14,12 @@ interface ScoreResultProps {
 
 export default function ScoreResult({ impactScore, effortScore, quadrant, projectName, onClose }: ScoreResultProps) {
   const config = QUADRANT_CONFIG[quadrant]
+  const navigate = useNavigate()
+
+  function handleGoToMatrix() {
+    onClose()
+    setTimeout(() => navigate("/matriz"), 200)
+  }
 
   return (
     <motion.div
@@ -59,7 +66,7 @@ export default function ScoreResult({ impactScore, effortScore, quadrant, projec
       </div>
 
       <button
-        onClick={onClose}
+        onClick={handleGoToMatrix}
         className="w-full py-3 px-6 rounded-lg bg-electric text-white font-medium text-sm hover:bg-electric-bright shadow-glow-blue transition-all"
       >
         Ver en la Matriz
