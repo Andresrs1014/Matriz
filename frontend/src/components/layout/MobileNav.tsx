@@ -1,6 +1,6 @@
 // frontend/src/components/layout/MobileNav.tsx
 import { NavLink, useNavigate } from "react-router-dom"
-import { FolderKanban, Target, LogOut } from "lucide-react"
+import { LayoutDashboard, FolderKanban, Target, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/authStore"
 import { isUsuario } from "@/lib/roles"
@@ -11,6 +11,12 @@ export default function MobileNav() {
   const esUsuario = isUsuario(user)
 
   const navItems = [
+    {
+      to: "/dashboard",
+      icon: LayoutDashboard,
+      label: "Dashboard",
+      show: true,
+    },
     {
       to: esUsuario ? "/mis-proyectos" : "/projects",
       icon: FolderKanban,

@@ -38,11 +38,18 @@ def register(
     db: Session = Depends(get_db),
     _: User = Depends(require_coordinador),
 ):
+    VALID_ROLES = ("superadmin", "admin", "coordinador", "usuario")
+    if payload.role not in VALID_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Rol inválido. Valores permitidos: {', '.join(VALID_ROLES)}"
+        )
     user = create_user(
         db, email=str(payload.email),
         password=payload.password,
         full_name=payload.full_name,
         area=payload.area,
+        role=payload.role,
     )
     return _to_me(user)
 

@@ -4,8 +4,9 @@ from pydantic import BaseModel, EmailStr, Field
 class RegisterRequest(BaseModel):
     email: EmailStr
     full_name: str | None = Field(default=None, max_length=200)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=5, max_length=128)
     area: str | None = Field(default=None, max_length=100)
+    role: str = Field(default="usuario", max_length=50)
 
 
 class TokenResponse(BaseModel):

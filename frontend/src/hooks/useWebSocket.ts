@@ -3,12 +3,15 @@ import { useProjectStore } from "@/store/projectStore"
 import { useProjects } from "@/hooks/useProjects"
 import { toast } from "@/store/toastStore"
 import { WS_URL } from "@/lib/constants"
+import { useCommentEventStore } from "@/store/commentEventStore"
+import type { Comment } from "@/types/comment"
 
 export function useWebSocket() {
   const wsRef             = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { setWsConnected } = useProjectStore()
   const { fetchProjects } = useProjects()
+  const { setLastCommentEvent } = useCommentEventStore()
 
   // Guardar fetchProjects en un ref para que el useEffect no dependa de él
   // y no se re-ejecute cada vez que cambia su referencia
@@ -16,6 +19,11 @@ export function useWebSocket() {
   useEffect(() => {
     fetchProjectsRef.current = fetchProjects
   }, [fetchProjects])
+
+  const setLastCommentEventRef = useRef(setLastCommentEvent)
+  useEffect(() => {
+    setLastCommentEventRef.current = setLastCommentEvent
+  }, [setLastCommentEvent])
 
   useEffect(() => {
     const connect = () => {
@@ -58,7 +66,13 @@ export function useWebSocket() {
             case "roi_evaluated":
               toast.success(`ROI calculado: "${msg.data?.project_title ?? ""}" → ${msg.data?.cuadrante_roi ?? ""}`)
               break
-
+            case "comment.created": {
+              const comment = msg.data as Comment
+              if (comment?.project_id != null) {
+                setLastCommentEventRef.current(comment.project_id, comment)
+              }
+              break
+            }
             default:
               break
           }

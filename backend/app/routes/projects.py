@@ -135,10 +135,15 @@ async def escalar(
     """Paso 1 — Admin revisa el proyecto y lo eleva al superadmin."""
     project = get_project_any(db, project_id)
     project = escalar_proyecto(db, project, current_user)
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"Proyecto escalado al superadmin por {current_user.full_name or current_user.email}."
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.escalado", {"id": project_id})
     return _to_read(project)
 
@@ -186,10 +191,15 @@ async def superaprobar(
     db.commit()
 
     total = len(payload.question_ids) + len([t for t in payload.custom_questions if t.strip()])
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"Proyecto aprobado por superadmin. {total} pregunta(s) asignadas para evaluación."
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.superaprobado", {"id": project_id})
     return _to_read(project)
 
@@ -238,10 +248,15 @@ async def iniciar_eval(
         )
 
     project = iniciar_evaluacion(db, project)
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"Evaluación iniciada por {current_user.full_name or current_user.email}. {len(questions)} pregunta(s) activas."
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.en_evaluacion", {"id": project_id})
     return _to_read(project)
 
@@ -260,10 +275,15 @@ async def marcar_eval(
     """
     project = get_project_any(db, project_id)
     project = marcar_evaluado(db, project)
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"Evaluación completada por {current_user.full_name or current_user.email}. Impacto/esfuerzo registrado."
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.evaluado", {"id": project_id})
     return _to_read(project)
 
@@ -304,10 +324,15 @@ async def proveer_salario(
     db.commit()
 
     project = registrar_salario(db, project)
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"Datos salariales registrados por superadmin. Pendiente datos operacionales del admin."
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.pendiente_salario", {"id": project_id})
     return _to_read(project)
 
@@ -356,12 +381,17 @@ async def completar_roi(
     db.commit()
 
     obs = payload.observacion or "Sin observaciones."
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"ROI calculado por {current_user.full_name or current_user.email}. "
         f"Ahorro: {horas_ahorradas:.1f}h × {payload.num_personas} personas = "
         f"{ahorro_horas_hombre:.1f} h/h ahorradas. {obs}"
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.aprobado_final", {"id": project_id})
     return _to_read(project)
 
@@ -377,9 +407,14 @@ async def rechazar(
     """Admin o superadmin pueden rechazar el proyecto en cualquier etapa."""
     project = get_project_any(db, project_id)
     project = rechazar_proyecto(db, project, current_user)
-    create_status_comment(
+    sc = create_status_comment(
         db, project_id, current_user,
         f"Proyecto rechazado por {current_user.full_name or current_user.email}."
     )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
     await ws_manager.broadcast("project.rechazado", {"id": project_id})
     return _to_read(project)

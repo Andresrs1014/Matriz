@@ -1,22 +1,14 @@
 // frontend/src/components/chat/ProjectChat.tsx
 import { useEffect, useRef, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Send, Info, Loader2 } from "lucide-react"
+import { Send, Info, Loader2, Trash2 } from "lucide-react"
 import { useAuthStore } from "@/store/authStore"
 import { isAdmin, isSuperAdmin, isCoordinador } from "@/lib/roles"
+import { useCommentEventStore } from "@/store/commentEventStore"
+import { toast } from "@/store/toastStore"
 import api from "@/lib/api"
 import { cn } from "@/lib/utils"
-
-interface Comment {
-  id: number
-  project_id: number
-  author_id: number
-  author_role: string
-  author_name: string
-  message: string
-  tipo: string
-  created_at: string
-}
+import type { Comment } from "@/types/comment"
 
 interface Props {
   projectId: number
@@ -49,35 +41,39 @@ export default function ProjectChat({ projectId }: Props) {
   const [tipo, setTipo] = useState("comentario")
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const esUsuario = user?.role === "usuario"
   const puedeElegiTipo = isAdmin(user) || isSuperAdmin(user) || isCoordinador(user)
 
+  // Escuchar eventos de nuevos comentarios vía WebSocket
+  const lastCommentEvent = useCommentEventStore((s) => s.lastCommentEvent)
+  useEffect(() => {
+    if (!lastCommentEvent || lastCommentEvent.projectId !== projectId) return
+    const incoming = lastCommentEvent.comment
+    // Filtrar para usuarios: solo sus mensajes + feedback/cambio_estado
+    if (esUsuario && incoming.author_id !== user?.id && incoming.tipo !== "feedback" && incoming.tipo !== "cambio_estado") return
+    setComments((prev) => {
+      if (prev.some((c) => c.id === incoming.id)) return prev
+      return [...prev, incoming]
+    })
+  }, [lastCommentEvent, projectId, esUsuario, user?.id])
+
   const fetchComments = useCallback(async () => {
     try {
+      // El backend ya filtra según el rol del usuario autenticado
       const { data } = await api.get<Comment[]>(`/projects/${projectId}/comments`)
-      // Usuario solo ve comentarios donde él participó + feedback que le enviaron
-      if (esUsuario) {
-        setComments(data.filter((c) =>
-          c.author_id === user?.id ||
-          c.tipo === "feedback" ||
-          c.tipo === "cambio_estado"
-        ))
-      } else {
-        setComments(data)
-      }
+      setComments(data)
     } catch {
       setComments([])
     } finally {
       setLoading(false)
     }
-  }, [projectId, esUsuario, user?.id])
+  }, [projectId])
 
   useEffect(() => {
     fetchComments()
-    const interval = setInterval(fetchComments, 6000)
-    return () => clearInterval(interval)
   }, [fetchComments])
 
   useEffect(() => {
@@ -88,14 +84,28 @@ export default function ProjectChat({ projectId }: Props) {
     if (!message.trim() || sending) return
     setSending(true)
     try {
-      await api.post(`/projects/${projectId}/comments`, {
+      const { data: newComment } = await api.post<Comment>(`/projects/${projectId}/comments`, {
         message: message.trim(),
         tipo: esUsuario ? "comentario" : tipo,
       })
       setMessage("")
-      await fetchComments()
+      setComments((prev) =>
+        prev.some((c) => c.id === newComment.id) ? prev : [...prev, newComment]
+      )
     } finally {
       setSending(false)
+    }
+  }
+
+  async function handleDelete(commentId: number) {
+    setDeletingId(commentId)
+    try {
+      await api.delete(`/projects/${projectId}/comments/${commentId}`)
+      setComments((prev) => prev.filter((c) => c.id !== commentId))
+    } catch {
+      toast.error("No se pudo eliminar el comentario.")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -130,6 +140,7 @@ export default function ProjectChat({ projectId }: Props) {
           <AnimatePresence initial={false}>
             {comments.map((c) => {
               const isMine = c.author_id === user?.id
+              const canDelete = isMine || isAdmin(user) || isSuperAdmin(user) || isCoordinador(user)
               const tipoClass = TIPO_COLORS[c.tipo] ?? TIPO_COLORS.comentario
               const roleColor = ROLE_COLORS[c.author_role] ?? "text-slate-400"
               return (
@@ -137,7 +148,7 @@ export default function ProjectChat({ projectId }: Props) {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={cn(
-                    "rounded-lg border px-3 py-2.5 text-sm",
+                    "rounded-lg border px-3 py-2.5 text-sm group relative",
                     tipoClass,
                     isMine ? "ml-6" : "mr-6"
                   )}>
@@ -146,12 +157,27 @@ export default function ProjectChat({ projectId }: Props) {
                       {c.author_name}
                       <span className="text-slate-600 font-normal ml-1">({c.author_role})</span>
                     </span>
-                    <span className="text-[10px] text-slate-600 shrink-0">
-                      {new Date(c.created_at).toLocaleString("es-CO", {
-                        month: "short", day: "numeric",
-                        hour: "2-digit", minute: "2-digit",
-                      })}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-600 shrink-0">
+                        {new Date(c.created_at).toLocaleString("es-CO", {
+                          month: "short", day: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </span>
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          disabled={deletingId === c.id}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-600 hover:text-red-400 disabled:opacity-50"
+                          aria-label="Eliminar comentario"
+                        >
+                          {deletingId === c.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <Trash2 className="w-3 h-3" />
+                          }
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {c.tipo !== "comentario" && (
                     <span className="text-[10px] uppercase tracking-wide text-slate-500 block mb-1">
