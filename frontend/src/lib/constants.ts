@@ -1,3 +1,5 @@
+import { TrendingUp, Zap, Smile, Gem } from "lucide-react"
+
 export const QUADRANT_CONFIG = {
   esencial: {
     label:       "Esencial",
@@ -7,6 +9,7 @@ export const QUADRANT_CONFIG = {
     textClass:   "text-cyan-400",
     glowClass:   "shadow-[0_0_20px_rgba(34,211,238,0.3)]",
     dotClass:    "bg-cyan-400",
+    Icon: TrendingUp,
   },
   estrategico: {
     label:       "Estratégico",
@@ -16,6 +19,7 @@ export const QUADRANT_CONFIG = {
     textClass:   "text-indigo-400",
     glowClass:   "shadow-[0_0_20px_rgba(129,140,248,0.3)]",
     dotClass:    "bg-indigo-400",
+    Icon: Zap,
   },
   indiferente: {
     label:       "Indiferente",
@@ -25,6 +29,7 @@ export const QUADRANT_CONFIG = {
     textClass:   "text-slate-400",
     glowClass:   "shadow-[0_0_20px_rgba(148,163,184,0.2)]",
     dotClass:    "bg-slate-400",
+    Icon: Smile,
   },
   lujo: {
     label:       "Lujo",
@@ -34,6 +39,7 @@ export const QUADRANT_CONFIG = {
     textClass:   "text-red-400",
     glowClass:   "shadow-[0_0_20px_rgba(248,113,113,0.3)]",
     dotClass:    "bg-red-400",
+    Icon: Gem,
   },
 } as const
 

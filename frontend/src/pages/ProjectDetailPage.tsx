@@ -1,14 +1,14 @@
 // frontend/src/pages/ProjectDetailPage.tsx
 import { useCallback, useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"   // ← AnimatePresence añadido
+import { motion } from "framer-motion"
 import {
   ArrowLeft, Calendar, ClipboardList, Target, Zap,
-  TrendingUp, MessageCircle,
+  TrendingUp, MessageCircle, Lock,
 } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
-import { isAdmin, isSuperAdmin, canVerROI } from "@/lib/roles"
+import { isAdmin, isSuperAdmin, canVerROI, isUsuario } from "@/lib/roles"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
 import { ROI_QUADRANT_CONFIG, type ROICuadranteKey } from "@/types/roi"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,7 @@ import type { Project } from "@/types/project"
 import type { ROIRead } from "@/types/roi"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import ProjectChat from "@/components/chat/ProjectChat"
+import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
 
 interface Evaluation {
   id: number
@@ -28,28 +29,43 @@ interface Evaluation {
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   pendiente_revision:  { label: "Pendiente revisión",  class: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
-  escalado:            { label: "Escalado",             class: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
-  preguntas_asignadas: { label: "Preguntas asignadas",  class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-  en_evaluacion:       { label: "En evaluación",        class: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  evaluado:            { label: "Evaluado",             class: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
-  pendiente_salario:   { label: "Pendiente salario",    class: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
-  calculando_roi:      { label: "Calculando ROI",       class: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
-  aprobado_final:      { label: "✓ Aprobado",           class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-  rechazado:           { label: "Rechazado",            class: "bg-red-500/20 text-red-400 border-red-500/30" },
+  escalado:            { label: "Escalado",            class: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  preguntas_asignadas: { label: "Preguntas asignadas", class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  en_evaluacion:       { label: "En evaluación",       class: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  evaluado:            { label: "Evaluado",            class: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
+  pendiente_salario:   { label: "Pendiente salario",   class: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+  calculando_roi:      { label: "Calculando ROI",      class: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+  aprobado_final:      { label: "✓ Aprobado",          class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  rechazado:           { label: "Rechazado",           class: "bg-red-500/20 text-red-400 border-red-500/30" },
+}
+
+// Estados amigables para el usuario normal
+const STATUS_CONFIG_USUARIO: Record<string, { label: string; class: string }> = {
+  pendiente_revision:  { label: "En espera de revisión", class: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+  escalado:            { label: "En revisión",           class: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  preguntas_asignadas: { label: "Aprobado, en cola",     class: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  en_evaluacion:       { label: "Siendo evaluado",       class: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  evaluado:            { label: "Evaluado",              class: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
+  pendiente_salario:   { label: "Siendo evaluado",       class: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  calculando_roi:      { label: "Siendo evaluado",       class: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+  aprobado_final:      { label: "✓ Aprobado",            class: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  rechazado:           { label: "Rechazado",             class: "bg-red-500/20 text-red-400 border-red-500/30" },
 }
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const [project, setProject] = useState<Project | null>(null)
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([])
-  const [roiData, setRoiData] = useState<ROIRead | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [evaluating, setEvaluating] = useState(false)
-  const [fetchError, setFetchError] = useState<string | null>(null)
 
-  const canSeeROI = canVerROI(user)
+  const [project, setProject]       = useState<Project | null>(null)
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([])
+  const [roiData, setRoiData]       = useState<ROIRead | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [evaluating, setEvaluating] = useState(false)
+
+  const esUsuario   = isUsuario(user)
+  const canSeeROI   = canVerROI(user)
   const canEvaluate = isAdmin(user) || isSuperAdmin(user)
 
   const fetchData = useCallback(async () => {
@@ -63,6 +79,7 @@ export default function ProjectDetailPage() {
       ])
       setProject(projRes.data)
       setEvaluations(evalRes.data)
+
       if (canSeeROI) {
         const roiRes = await api.get(`/roi/${id}`).catch(() => ({ data: null }))
         setRoiData(roiRes.data)
@@ -86,12 +103,10 @@ export default function ProjectDetailPage() {
 
   if (fetchError) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-sm text-red-400">{fetchError}</p>
-        <button
-          onClick={() => navigate("/projects")}
-          className="text-sm text-electric hover:underline"
-        >
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-500">
+        <p className="text-sm">{fetchError}</p>
+        <button onClick={() => navigate("/projects")}
+          className="text-sm text-electric hover:underline">
           Volver a proyectos
         </button>
       </div>
@@ -102,162 +117,267 @@ export default function ProjectDetailPage() {
 
   const latestEval   = evaluations[0] ?? null
   const latestConfig = latestEval ? QUADRANT_CONFIG[latestEval.quadrant as QuadrantKey] : null
-  const roiConfig    = roiData ? ROI_QUADRANT_CONFIG[roiData.cuadrante_roi as ROICuadranteKey] ?? ROI_QUADRANT_CONFIG.bajo_impacto : null
-  const statusConf   = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.pendiente_revision
 
-  // El botón evaluar solo aparece cuando el proyecto está en_evaluacion
+  // ROI solo se muestra cuando roi_pct > 0 (parte2 completada)
+  const roiCalculado = roiData && roiData.roi_pct > 0
+  const roiConfig    = roiCalculado
+    ? ROI_QUADRANT_CONFIG[roiData!.cuadrante_roi as ROICuadranteKey] ?? ROI_QUADRANT_CONFIG.bajo_impacto
+    : null
+
+  // Usar labels amigables para usuario normal
+  const statusMap  = esUsuario ? STATUS_CONFIG_USUARIO : STATUS_CONFIG
+  const statusConf = statusMap[project.status] ?? statusMap.pendiente_revision
+
+  // Breadcrumb dinámico por rol
+  const backPath  = esUsuario ? "/mis-proyectos" : "/projects"
+  const backLabel = esUsuario ? "Mis proyectos" : "Proyectos"
 
   return (
     <>
-      {/* Contenido principal — sin EvaluationWizard adentro */}
-      <div className="p-6 mx-auto w-full max-w-[1126px] animate-fade-in flex flex-col gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
 
         {/* Breadcrumb */}
-        <button
-          onClick={() => navigate("/projects")}
-          className="self-start flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-        >
-          <ArrowLeft size={16} /> Volver a Proyectos
+        <button onClick={() => navigate(backPath)}
+          className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Volver a {backLabel}
         </button>
 
         {/* Header */}
-        <div className="glass-card p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 flex-wrap mb-2">
-                <h2 className="text-xl font-bold text-white">{project.title}</h2>
-                <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border", statusConf.class)}>
-                  {statusConf.label}
-                </span>
-              </div>
-              {project.description && (
-                <p className="text-slate-400 text-sm leading-relaxed mb-4">{project.description}</p>
-              )}
-              <div className="flex items-center gap-4 text-xs text-slate-500">
-                <span className="flex items-center gap-1">
-                  <ClipboardList size={12} />
-                  {project.source === "list" ? "Microsoft Lists" : "Manual"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Calendar size={12} />
-                  {new Date(project.created_at).toLocaleDateString("es-CO")}
-                </span>
-              </div>
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row sm:items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-xl font-bold text-white">{project.title}</h1>
+              <span className={cn(
+                "text-xs font-medium px-2.5 py-1 rounded-full border",
+                statusConf.class
+              )}>
+                {statusConf.label}
+              </span>
             </div>
+            {project.description && (
+              <p className="text-sm text-slate-400 mt-1.5">{project.description}</p>
+            )}
+            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+              <span className="flex items-center gap-1">
+                <ClipboardList className="w-3.5 h-3.5" />
+                {project.source === "list" ? "Microsoft Lists" : "Manual"}
+              </span>
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5" />
+                {new Date(project.created_at).toLocaleDateString("es-CO")}
+              </span>
+            </div>
+          </div>
 
-            {/* ← CORREGIDO: solo visible cuando status === "en_evaluacion" */}
-            {canEvaluate && project.status === "en_evaluacion" && (
-              <button
-                onClick={() => setEvaluating(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap"
-              >
-                <Target size={15} />
-                {latestEval ? "Re-evaluar" : "Evaluar Impacto/Esfuerzo"}
-              </button>
+          {/* Botón evaluar — solo admin cuando proyecto está en_evaluacion */}
+          {canEvaluate && project.status === "en_evaluacion" && (
+            <button onClick={() => setEvaluating(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric/10 border border-electric/30 text-electric text-sm font-medium hover:bg-electric/20 transition-all whitespace-nowrap shrink-0">
+              <Target className="w-4 h-4" />
+              {latestEval ? "Re-evaluar" : "Evaluar Impacto/Esfuerzo"}
+            </button>
+          )}
+        </motion.div>
+
+        {/* Layout dos columnas */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+          {/* ── Columna izquierda ────────────────────────────── */}
+          <div className="space-y-5">
+
+            {/* Posición en la Matriz */}
+            {latestEval && latestConfig ? (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
+                  Posición en la Matriz
+                </p>
+                <div className={cn(
+                  "flex items-center gap-3 p-3 rounded-lg border mb-4",
+                  latestConfig.bgClass
+                )}>
+                  <latestConfig.Icon className={cn("w-5 h-5 shrink-0", latestConfig.color)} />
+                  <div>
+                    <p className={cn("text-sm font-semibold", latestConfig.color)}>
+                      {latestConfig.label}
+                    </p>
+                    <p className="text-xs text-slate-400">{latestConfig.description}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <MetricBox
+                    icon={<TrendingUp className="w-4 h-4 text-electric" />}
+                    label="Impacto"
+                    value={`${latestEval.impact_score.toFixed(0)}/100`}
+                    barColor="bg-electric"
+                    barValue={latestEval.impact_score}
+                  />
+                  <MetricBox
+                    icon={<Zap className="w-4 h-4 text-amber-400" />}
+                    label="Esfuerzo"
+                    value={`${latestEval.effort_score.toFixed(0)}/100`}
+                    barColor="bg-amber-400"
+                    barValue={latestEval.effort_score}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                  Posición en la Matriz
+                </p>
+                <div className="flex flex-col items-center justify-center py-8 gap-2 text-slate-600">
+                  <Target className="w-8 h-8 opacity-30" />
+                  <p className="text-sm">Aún sin evaluación</p>
+                </div>
+              </div>
+            )}
+
+            {/* ROI */}
+            {canSeeROI ? (
+              roiCalculado && roiConfig ? (
+                <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
+                    Análisis ROI
+                  </p>
+                  <div className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg border mb-4",
+                    roiConfig.bgClass, roiConfig.borderClass
+                  )}>
+                    <p className={cn("text-sm font-semibold", roiConfig.color)}>
+                      {roiConfig.label}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-slate-800/60 rounded-lg p-3">
+                      <p className="text-slate-500">ROI</p>
+                      <p className="text-emerald-400 font-bold text-base mt-0.5">
+                        {roiData!.roi_pct.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="bg-slate-800/60 rounded-lg p-3">
+                      <p className="text-slate-500">Horas ahorradas</p>
+                      <p className="text-amber-400 font-bold text-base mt-0.5">
+                        {roiData!.horas_ahorradas.toFixed(1)}h
+                      </p>
+                    </div>
+                    <div className="bg-slate-800/60 rounded-lg p-3">
+                      <p className="text-slate-500">Proceso actual</p>
+                      <p className="text-slate-200 font-semibold mt-0.5">
+                        {roiData!.horas_proceso_actual.toFixed(1)}h
+                      </p>
+                    </div>
+                    <div className="bg-slate-800/60 rounded-lg p-3">
+                      <p className="text-slate-500">Proceso nuevo</p>
+                      <p className="text-slate-200 font-semibold mt-0.5">
+                        {(roiData!.horas_proyectadas ?? 0).toFixed(1)}h
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                    Análisis ROI
+                  </p>
+                  <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-600">
+                    <TrendingUp className="w-8 h-8 opacity-30" />
+                    <p className="text-sm">ROI aún no calculado</p>
+                    {roiData && roiData.roi_pct === 0 && (
+                      <p className="text-xs text-slate-700 text-center px-4">
+                        Salario registrado · pendiente datos operacionales
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            ) : (
+              /* Usuario normal — ROI bloqueado */
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                  Análisis ROI
+                </p>
+                <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-600">
+                  <Lock className="w-8 h-8 opacity-30" />
+                  <p className="text-sm text-center">
+                    El análisis ROI no está disponible para tu rol
+                  </p>
+                </div>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Resultado en la Matriz */}
-        {latestEval && latestConfig && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={cn("glass-card p-6 border", latestConfig.bgClass)}
-          >
-            <p className="text-xs text-slate-400 uppercase tracking-wider mb-5">Posición actual en la Matriz</p>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-              <div className={cn("px-5 py-4 rounded-xl border w-fit shrink-0", latestConfig.bgClass, latestConfig.glowClass)}>
-                <p className={cn("text-2xl font-bold", latestConfig.textClass)}>{latestConfig.label}</p>
-                <p className="text-xs text-slate-400 mt-1">{latestConfig.description}</p>
+          {/* ── Columna derecha — Mini plot + Chat ───────────── */}
+          <div className="space-y-5">
+
+            {/* Mini scatter plot */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4">
+                Posición visual en la Matriz
+              </p>
+              {latestEval ? (
+                <MatrixMiniPlot
+                  impactScore={latestEval.impact_score}
+                  effortScore={latestEval.effort_score}
+                  quadrant={latestEval.quadrant as QuadrantKey}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-48 gap-2 text-slate-600">
+                  <Target className="w-8 h-8 opacity-20" />
+                  <p className="text-sm">Sin posición aún</p>
+                </div>
+              )}
+            </div>
+
+            {/* Chat */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-700/50">
+                <MessageCircle className="w-4 h-4 text-electric" />
+                <span className="text-sm font-medium text-slate-200">
+                  Canal de comunicación
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-4 flex-1">
-                <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <TrendingUp size={13} className="text-cyan-400" />
-                    <span className="text-xs text-slate-400">Impacto</span>
-                  </div>
-                  <p className="text-2xl font-bold text-cyan-400">
-                    {latestEval.impact_score.toFixed(0)}
-                    <span className="text-sm text-slate-500">/100</span>
-                  </p>
-                </div>
-                <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Zap size={13} className="text-indigo-400" />
-                    <span className="text-xs text-slate-400">Esfuerzo</span>
-                  </div>
-                  <p className="text-2xl font-bold text-indigo-400">
-                    {latestEval.effort_score.toFixed(0)}
-                    <span className="text-sm text-slate-500">/100</span>
-                  </p>
-                </div>
+              <div className="h-80">
+                <ProjectChat projectId={project.id}/>
               </div>
             </div>
-          </motion.div>
-        )}
-
-        {/* ROI */}
-        {canSeeROI && roiData && roiData.horas_proceso_actual > 0 && roiConfig && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={cn("glass-card p-6 border", roiConfig.bgClass, roiConfig.borderClass)}
-          >
-            <p className="text-xs text-slate-400 uppercase tracking-wider mb-5">Análisis de ROI</p>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-              <div className={cn("px-5 py-4 rounded-xl border w-fit shrink-0", roiConfig.bgClass, roiConfig.borderClass)}>
-                <p className={cn("text-2xl font-bold", roiConfig.textClass)}>{roiConfig.label}</p>
-                <p className="text-xs text-slate-400 mt-1">{roiConfig.action}</p>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1">
-                <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
-                  <p className="text-xs text-slate-400 mb-2">ROI</p>
-                  <p className={cn("text-xl font-bold", roiConfig.textClass)}>{roiData.roi_pct.toFixed(1)}%</p>
-                </div>
-                <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
-                  <p className="text-xs text-slate-400 mb-2">Horas antes</p>
-                  <p className="text-xl font-bold text-white">{roiData.horas_proceso_actual.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
-                </div>
-                <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
-                  <p className="text-xs text-slate-400 mb-2">Horas nuevas</p>
-                  <p className="text-xl font-bold text-blue-400">
-                    {(roiData.horas_proyectadas ?? (roiData.horas_proceso_actual - roiData.horas_ahorradas)).toFixed(1)}
-                    <span className="text-sm text-slate-500"> h</span>
-                  </p>
-                </div>
-                <div className="bg-navy-800/60 rounded-xl p-4 border border-navy-700">
-                  <p className="text-xs text-slate-400 mb-2">Horas ahorradas</p>
-                  <p className="text-xl font-bold text-emerald-400">{roiData.horas_ahorradas.toFixed(1)}<span className="text-sm text-slate-500"> h</span></p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Chat */}
-        <div className="glass-card overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-700/50">
-            <MessageCircle className="w-4 h-4 text-electric" />
-            <span className="text-sm font-medium text-slate-200">Canal de comunicación</span>
-          </div>
-          <div className="h-[500px]">
-            <ProjectChat projectId={project.id} />
           </div>
         </div>
-
       </div>
 
-      {/* ← CORREGIDO: EvaluationWizard FUERA del div animado con AnimatePresence */}
-      <AnimatePresence>
-        {evaluating && (
-          <EvaluationWizard
-            projectId={project.id}
-            projectName={project.title}
-            onClose={() => { setEvaluating(false); fetchData() }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Wizard evaluación — fuera del layout para no romper el z-index */}
+      {evaluating && (
+        <EvaluationWizard
+          projectId={project.id}
+          projectName={project.title}
+          onClose={() => { setEvaluating(false); fetchData() }}
+        />
+      )}
     </>
+  )
+}
+
+// ── Componente local ───────────────────────────────────────────────────────────
+function MetricBox({
+  icon, label, value, barColor, barValue,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  barColor: string
+  barValue: number
+}) {
+  return (
+    <div className="bg-slate-800/60 rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-1.5">
+        {icon}
+        <span className="text-xs text-slate-400">{label}</span>
+      </div>
+      <p className="text-sm font-bold text-white">{value}</p>
+      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", barColor)}
+          style={{ width: `${barValue}%` }} />
+      </div>
+    </div>
   )
 }
