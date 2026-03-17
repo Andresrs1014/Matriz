@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 SEDES = ["LOGIMAT", "LOGIMAT B2", "IMC CARGO", "IMC DEPOSITO"]
 
@@ -22,29 +22,33 @@ class ROIParte2Input(BaseModel):
 class ROIRead(BaseModel):
     id: int
     project_id: int
-
-    # Parte 1
     cargo: str
     sede: str
     num_personas: int
     valor_quincena: float
     valor_dia: float
     valor_hora_hombre: float
-    # salario_base NO se expone
-
-    # Parte 2
     horas_proceso_actual: float
-    horas_proyectadas: float = Field(alias="horas_proceso_nuevo")
-
-    # Calculados
-    horas_ahorradas: float
-    roi_valor: float         # ahorro por 1 persona
-    roi_valor_total: float   # ahorro total × num_personas
-    roi_pct: float
-    cuadrante_roi: str
+    horas_proceso_nuevo: float = Field(default=0.0)   # nombre real en el modelo
+    horas_proyectadas: float = Field(default=0.0)     # alias para el frontend
+    horas_ahorradas: float = Field(default=0.0)
+    ahorro_horas_hombre: float = Field(default=0.0)
+    valor_ahorro: float = Field(default=0.0)
+    roi_valor: float = Field(default=0.0)
+    roi_valor_total: float = Field(default=0.0)
+    roi_pct: float = Field(default=0.0)
+    cuadrante_roi: str = Field(default="sin_evaluar")
     created_at: datetime
 
-    model_config = {"from_attributes": True, "populate_by_name": True}
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def sync_horas_proyectadas(self) -> "ROIRead":
+        if self.horas_proyectadas == 0.0 and self.horas_proceso_nuevo > 0:
+            self.horas_proyectadas = self.horas_proceso_nuevo
+        return self
+
+
 
 
 # ── Para la matriz ROI ────────────────────────────────────────────────────────
