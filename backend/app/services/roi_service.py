@@ -140,14 +140,27 @@ def completar_roi_calculo(
     horas_proceso_nuevo: float,
     db: Session,
 ) -> ROIEvaluation:
-    horas_ahorradas = round(horas_proceso_actual - horas_proceso_nuevo, 2)
+    horas_ahorradas     = round(horas_proceso_actual - horas_proceso_nuevo, 2)
     ahorro_horas_hombre = round(horas_ahorradas * num_personas, 2)
-    valor_ahorro = round(ahorro_horas_hombre * roi.valor_hora_hombre, 2)
-    roi_valor = round(horas_ahorradas * roi.valor_hora_hombre, 2)
-    roi_pct = round(
+    valor_ahorro        = round(ahorro_horas_hombre * roi.valor_hora_hombre, 2)
+    roi_valor           = round(horas_ahorradas * roi.valor_hora_hombre, 2)
+    roi_pct             = round(
         (horas_ahorradas / horas_proceso_actual) * 100, 2
     ) if horas_proceso_actual > 0 else 0.0
 
-    roi.num_personas = num_personas
-    # ...existing code...
+    # ← ESTO es lo que faltaba — asignar TODOS los campos
+    roi.num_personas         = num_personas
+    roi.horas_proceso_actual = horas_proceso_actual
+    roi.horas_proceso_nuevo  = horas_proceso_nuevo
+    roi.horas_ahorradas      = horas_ahorradas
+    roi.ahorro_horas_hombre  = ahorro_horas_hombre
+    roi.valor_ahorro         = valor_ahorro
+    roi.roi_valor            = roi_valor
+    roi.roi_valor_total      = valor_ahorro
+    roi.roi_pct              = roi_pct
+    roi.cuadrante_roi        = assign_roi_quadrant(horas_ahorradas, valor_ahorro)
+
+    db.add(roi)
+    db.commit()
+    db.refresh(roi)
     return roi
