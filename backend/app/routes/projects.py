@@ -307,9 +307,15 @@ async def proveer_salario(
     Crea el registro ROIEvaluation con los datos económicos.
     """
     project = get_project_any(db, project_id)
-    existing = db.exec(select(ROIEvaluation).where(ROIEvaluation.project_id == project_id)).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="El salario ya fue registrado para este proyecto.")
+    # REEMPLAZAR por — elimina el anterior si existe y crea uno nuevo limpio
+    old_roi = db.exec(select(ROIEvaluation).where(ROIEvaluation.project_id == project_id)).first()
+    if old_roi:
+        db.delete(old_roi)
+    db.flush()
+
+    # existing = db.exec(select(ROIEvaluation).where(ROIEvaluation.project_id == project_id)).first()
+    # if existing:
+    #     raise HTTPException(status_code=400, detail="El salario ya fue registrado para este proyecto.")
     valores = _calcular_valor_hora(payload.salario_base)
     roi = ROIEvaluation(
         project_id=project_id,

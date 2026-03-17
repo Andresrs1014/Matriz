@@ -78,7 +78,7 @@ export default function MatrixPage() {
 
   useEffect(() => {
     if (tab === "roi" && canSeeROI && roiPlotPoints.length === 0) fetchROIPlot()
-  }, [tab]) // eslint-disable-line
+  }, [tab, fetchROIPlot]) // eslint-disable-line
 
   const opCounts = plotPoints.reduce<Record<string, number>>((acc, p) => {
     acc[p.quadrant] = (acc[p.quadrant] ?? 0) + 1
