@@ -24,6 +24,7 @@ export interface ProjectQuestion {
   id: number
   project_id: number
   question_text: string
+  axis: "impact" | "effort"   
   source_question_id: number | null
   created_by: number
   created_at: string

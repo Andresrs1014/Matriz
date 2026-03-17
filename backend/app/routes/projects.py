@@ -200,7 +200,7 @@ async def superaprobar(
     db.commit()
     total = len(payload.question_ids) + len([
         x for x in payload.custom_questions
-        if (getattr(x, "text", x)).strip()
+        if (getattr(x, "text", x)) and str(getattr(x, "text", x)).strip()
     ])
     sc = create_status_comment(
         db, project_id, current_user,
