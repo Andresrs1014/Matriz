@@ -126,28 +126,42 @@ def get_evaluations_for_project(
         .order_by(col(MatrixEvaluation.created_at))  # ← col() corregido
     ).all())
 
-
 def get_latest_evaluation_per_project(
     db: Session, owner_id: int | None = None
-) -> list[MatrixEvaluation]:
+) -> list[dict]:
     """Última evaluación de cada proyecto para el scatter plot."""
+    from app.models.project import Project
+
     project_ids = db.exec(
         select(MatrixEvaluation.project_id).distinct()
     ).all()
 
     results = []
     for pid in project_ids:
+        # Filtrar por owner si aplica
+        project = db.get(Project, pid)
+        if not project:
+            continue
+        if owner_id is not None and project.owner_id != owner_id:
+            continue
+
+        # Última evaluación de este proyecto
         latest = db.exec(
             select(MatrixEvaluation)
             .where(MatrixEvaluation.project_id == pid)
-            .order_by(col(MatrixEvaluation.created_at).desc())  # ← col() corregido
+            .order_by(col(MatrixEvaluation.created_at).desc())
         ).first()
+
         if latest:
-            if owner_id is None:
-                results.append(latest)
-            else:
-                from app.models.project import Project
-                project = db.get(Project, pid)
-                if project and project.owner_id == owner_id:
-                    results.append(latest)
+            results.append({
+                "project_id": pid,
+                "project_title": project.title,       # ← título del proyecto
+                "impact_score": latest.impact_score,
+                "effort_score": latest.effort_score,
+                "quadrant": latest.quadrant,
+                "evaluation_id": latest.id,
+                "evaluated_at": latest.created_at,
+            })
+
     return results
+
