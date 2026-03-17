@@ -18,7 +18,7 @@ export default function ScoreResult({ impactScore, effortScore, quadrant, projec
 
   function handleGoToMatrix() {
     onClose()
-    setTimeout(() => navigate("/matriz"), 200)
+    setTimeout(() => navigate("/matrix"), 200)
   }
 
   return (

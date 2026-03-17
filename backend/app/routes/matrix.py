@@ -170,11 +170,10 @@ async def evaluate_project(
     """
     assert current_user.id is not None
     evaluation = create_evaluation(
-        db=db,
-        project_id=project_id,
-        owner_id=current_user.id,
-        payload=payload,
-    )
+    project_id=project_id,
+    payload=payload,
+    db=db,
+)
     assert evaluation.id is not None
     await ws_manager.broadcast(
         event_type="evaluation_created",
