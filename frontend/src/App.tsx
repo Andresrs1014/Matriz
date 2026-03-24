@@ -9,7 +9,7 @@ const LoginPage          = React.lazy(() => import("@/pages/LoginPage"))
 const DashboardPage      = React.lazy(() => import("@/pages/DashboardPage"))
 const ProjectsPage       = React.lazy(() => import("@/pages/ProjectsPage"))
 const UserProjectsPage   = React.lazy(() => import("@/pages/UserProjectsPage"))
-const ProjectDetailPage  = React.lazy(() => import("@/pages/ProjectDetailPage"))
+const ProjectDetailPage  = React.lazy(() => import("@/pages/ProjectDetailShowcasePage"))
 const MatrixPage         = React.lazy(() => import("@/pages/MatrixPage"))
 const SettingsPage       = React.lazy(() => import("@/pages/SettingsPage"))
 
