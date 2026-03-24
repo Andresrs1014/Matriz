@@ -476,7 +476,7 @@ export default function SuperadminApprovalModal({
                 disabled={approving || !selectedCategoryId}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                {approving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {approving ? <Loader2 className="w-4 h-4 animate-spin" /> : <img src="/zymo01.png" alt="Aprobar" className="w-4 h-4 rounded-full bg-white border border-slate-400" />} 
                 {approving ? "Aprobando..." : "Aprobar proyecto"}
               </button>
             )}
