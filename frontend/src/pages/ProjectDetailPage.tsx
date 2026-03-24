@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   ArrowLeft, Calendar, ClipboardList, Target, Zap,
-  TrendingUp, MessageCircle, Lock,
+  TrendingUp, MessageCircle, Lock, UserRound, Users,
 } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
@@ -131,6 +131,16 @@ export default function ProjectDetailPage() {
   // Breadcrumb dinámico por rol
   const backPath  = esUsuario ? "/mis-proyectos" : "/projects"
   const backLabel = esUsuario ? "Mis proyectos" : "Proyectos"
+  const projectSummary = project.okr_objectives ?? project.description
+  const detailSections = [
+    { label: "Objetivos del OKR", value: project.okr_objectives ?? project.description },
+    { label: "Resultados clave", value: project.key_results },
+    { label: "Acciones clave", value: project.key_actions },
+    { label: "Recursos", value: project.resources },
+    { label: "Los 5 porqué", value: project.five_whys },
+    { label: "Métodos de medición", value: project.measurement_methods },
+  ].filter((section) => Boolean(section.value))
+  const collaborators = project.collaborators ?? []
 
   return (
     <>
@@ -155,8 +165,8 @@ export default function ProjectDetailPage() {
                 {statusConf.label}
               </span>
             </div>
-            {project.description && (
-              <p className="text-sm text-slate-400 mt-1.5">{project.description}</p>
+            {projectSummary && (
+              <p className="text-sm text-slate-400 mt-1.5">{projectSummary}</p>
             )}
             <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
               <span className="flex items-center gap-1">
@@ -166,6 +176,10 @@ export default function ProjectDetailPage() {
               <span className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" />
                 {new Date(project.created_at).toLocaleDateString("es-CO")}
+              </span>
+              <span className="flex items-center gap-1">
+                <UserRound className="w-3.5 h-3.5" />
+                {project.submitted_by_name ?? `Usuario ${project.owner_id}`}
               </span>
             </div>
           </div>
@@ -185,6 +199,60 @@ export default function ProjectDetailPage() {
 
           {/* ── Columna izquierda ────────────────────────────── */}
           <div className="space-y-5">
+
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 space-y-5">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                  Ficha del OKR
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Fecha de carga</p>
+                    <p className="text-sm text-slate-200">
+                      {new Date(project.created_at).toLocaleDateString("es-CO", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Subido por</p>
+                    <p className="text-sm text-slate-200">
+                      {project.submitted_by_name ?? `Usuario ${project.owner_id}`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {collaborators.length > 0 && (
+                <div>
+                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                    <Users className="w-3.5 h-3.5" />
+                    Personas que colaboraron
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {collaborators.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center rounded-full border border-electric/20 bg-electric/10 px-3 py-1 text-xs text-electric"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {detailSections.map((section) => (
+                  <div key={section.label} className="bg-slate-800/60 rounded-lg p-4">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">{section.label}</p>
+                    <p className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">{section.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Posición en la Matriz */}
             {latestEval && latestConfig ? (

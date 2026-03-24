@@ -1,15 +1,30 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class ProjectCreate(BaseModel):
     title: str
     description: str | None = None
+    okr_objectives: str | None = None
+    key_results: str | None = None
+    key_actions: str | None = None
+    resources: str | None = None
+    five_whys: str | None = None
+    measurement_methods: str | None = None
+    collaborators: list[str] = Field(default_factory=list)
 
 class ProjectRead(BaseModel):
     id: int
     title: str
     description: str | None
+    okr_objectives: str | None
+    key_results: str | None
+    key_actions: str | None
+    resources: str | None
+    five_whys: str | None
+    measurement_methods: str | None
+    submitted_by_name: str | None = None
+    collaborators: list[str] = Field(default_factory=list)
     status: str
     source: str
     owner_id: int

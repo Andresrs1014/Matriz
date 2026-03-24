@@ -38,6 +38,22 @@ def run_migrations() -> None:
         # ── Columnas previas ────────────────────────────────────────────────
         ("user.deactivated_at",
          "ALTER TABLE user ADD COLUMN deactivated_at DATETIME"),
+        ("project.okr_objectives",
+         "ALTER TABLE project ADD COLUMN okr_objectives TEXT"),
+        ("project.key_results",
+         "ALTER TABLE project ADD COLUMN key_results TEXT"),
+        ("project.key_actions",
+         "ALTER TABLE project ADD COLUMN key_actions TEXT"),
+        ("project.resources",
+         "ALTER TABLE project ADD COLUMN resources TEXT"),
+        ("project.five_whys",
+         "ALTER TABLE project ADD COLUMN five_whys TEXT"),
+        ("project.measurement_methods",
+         "ALTER TABLE project ADD COLUMN measurement_methods TEXT"),
+        ("project.submitted_by_name",
+         "ALTER TABLE project ADD COLUMN submitted_by_name TEXT"),
+        ("project.collaborators_json",
+         "ALTER TABLE project ADD COLUMN collaborators_json TEXT"),
 
         # ── ROI: columnas renombradas / nuevas ──────────────────────────────
         # Agregar columna con el nombre nuevo (horas_proceso_nuevo)

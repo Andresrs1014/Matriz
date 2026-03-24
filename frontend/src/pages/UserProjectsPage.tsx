@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, FolderKanban, XCircle, AlertCircle, ChevronRight, X } from "lucide-react"
+import { Plus, FolderKanban, XCircle, AlertCircle, ChevronRight } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
+import ProjectSubmitForm from "@/components/projects/ProjectSubmitForm"
 
 const STATUS_CONFIG: Record<string, { label: string; class: string; step: number }> = {
   pendiente_revision:  { label: "Pendiente revisión",  class: "bg-slate-500/20 text-slate-300 border-slate-500/30",    step: 1 },
@@ -28,10 +29,6 @@ export default function UserProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState("")
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   async function fetchProjects() {
@@ -47,31 +44,6 @@ export default function UserProjectsPage() {
   }
 
   useEffect(() => { fetchProjects() }, [])
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    if (!title.trim()) return
-    setCreating(true)
-    setCreateError("")
-    try {
-      await api.post("/projects", {
-        title: title.trim(),
-        description: description.trim() || null,
-      })
-      setTitle("")
-      setDescription("")
-      setShowForm(false)
-      await fetchProjects()
-    } catch (err: any) {
-      setCreateError(
-        err?.response?.status === 400
-          ? (err?.response?.data?.detail ?? "Error al crear el proyecto.")
-          : "Error al crear el proyecto."
-      )
-    } finally {
-      setCreating(false)
-    }
-  }
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 space-y-6">
@@ -95,53 +67,13 @@ export default function UserProjectsPage() {
       {/* Modal crear */}
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false) }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-700/60 rounded-2xl w-full max-w-md shadow-2xl">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50">
-                <h2 className="text-base font-semibold text-white">Nuevo proyecto</h2>
-                <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <form onSubmit={handleCreate} className="px-6 py-5 space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Nombre *</label>
-                  <input value={title} onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ej: Automatización de reportes" required
-                    className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-electric/50 transition-colors"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-                    Descripción <span className="text-slate-600">(opcional)</span>
-                  </label>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                    rows={3} placeholder="¿Qué problema resuelve tu proyecto?"
-                    className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-electric/50 transition-colors resize-none"
-                  />
-                </div>
-                {createError && (
-                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                    {createError}
-                  </p>
-                )}
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setShowForm(false)}
-                    className="flex-1 py-2.5 rounded-lg border border-slate-700/50 text-slate-400 text-sm hover:text-white transition-all">
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={creating || !title.trim()}
-                    className="flex-1 py-2.5 rounded-lg bg-electric text-white text-sm font-medium hover:bg-electric-bright disabled:opacity-40 transition-all">
-                    {creating ? "Creando..." : "Crear proyecto"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
+          <ProjectSubmitForm
+            onClose={() => setShowForm(false)}
+            onSuccess={async () => {
+              setShowForm(false)
+              await fetchProjects()
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -183,8 +115,10 @@ export default function UserProjectsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-semibold text-white truncate">{p.title}</h3>
-                      {p.description && (
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">{p.description}</p>
+                      {(p.okr_objectives ?? p.description) && (
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                          {p.okr_objectives ?? p.description}
+                        </p>
                       )}
                     </div>
                     <span className={cn(
@@ -222,11 +156,16 @@ export default function UserProjectsPage() {
                   )}
 
                   <div className="mt-4 flex items-center justify-between">
-                    <span className="text-xs text-slate-600">
-                      {new Date(p.created_at).toLocaleDateString("es-CO", {
-                        year: "numeric", month: "short", day: "numeric"
-                      })}
-                    </span>
+                    <div className="space-y-1">
+                      <span className="block text-xs text-slate-600">
+                        {new Date(p.created_at).toLocaleDateString("es-CO", {
+                          year: "numeric", month: "short", day: "numeric"
+                        })}
+                      </span>
+                      <span className="block text-[11px] text-slate-500">
+                        Subió: <span className="text-slate-300">{p.submitted_by_name ?? (user?.full_name ?? user?.email ?? "Sin dato")}</span>
+                      </span>
+                    </div>
                     <button onClick={() => navigate(`/projects/${p.id}`)}
                       className="flex items-center gap-1.5 text-xs text-electric hover:text-electric-bright transition-colors font-medium">
                       Ver detalle <ChevronRight className="w-3.5 h-3.5" />
