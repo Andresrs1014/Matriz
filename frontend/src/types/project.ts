@@ -3,6 +3,14 @@ export interface Project {
   id: number
   title: string
   description: string | null
+  okr_objectives: string | null
+  key_results: string | null
+  key_actions: string | null
+  resources: string | null
+  five_whys: string | null
+  measurement_methods: string | null
+  submitted_by_name: string | null
+  collaborators: string[]
   status: string
   source: string
   owner_id: number
@@ -18,6 +26,13 @@ export interface Project {
 export interface ProjectCreate {
   title: string
   description?: string
+  okr_objectives?: string
+  key_results?: string
+  key_actions?: string
+  resources?: string
+  five_whys?: string
+  measurement_methods?: string
+  collaborators?: string[]
 }
 
 export interface ProjectQuestion {

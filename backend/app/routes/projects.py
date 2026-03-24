@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, col
 from datetime import datetime, timezone
+import json
 from app.core.dependencies import (
     get_db, get_current_user,
     require_admin, require_superadmin,
@@ -30,12 +31,32 @@ from app.core.ws_manager import ws_manager
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
+def _parse_collaborators(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(item).strip() for item in data if str(item).strip()]
+
+
 def _to_read(p: Project) -> ProjectRead:
     assert p.id is not None
     return ProjectRead(
         id=p.id,
         title=p.title,
         description=p.description,
+        okr_objectives=p.okr_objectives,
+        key_results=p.key_results,
+        key_actions=p.key_actions,
+        resources=p.resources,
+        five_whys=p.five_whys,
+        measurement_methods=p.measurement_methods,
+        submitted_by_name=p.submitted_by_name,
+        collaborators=_parse_collaborators(p.collaborators_json),
         status=p.status,
         source=p.source,
         owner_id=p.owner_id,
@@ -78,9 +99,22 @@ async def create_project_endpoint(
 ):
     """Cualquier usuario autenticado puede crear un proyecto."""
     assert current_user.id is not None
+    collaborators = [
+        name.strip()
+        for name in payload.collaborators
+        if isinstance(name, str) and name.strip()
+    ]
     project = Project(
         title=payload.title,
         description=payload.description,
+        okr_objectives=payload.okr_objectives,
+        key_results=payload.key_results,
+        key_actions=payload.key_actions,
+        resources=payload.resources,
+        five_whys=payload.five_whys,
+        measurement_methods=payload.measurement_methods,
+        submitted_by_name=current_user.full_name or current_user.email,
+        collaborators_json=json.dumps(collaborators, ensure_ascii=False),
         owner_id=current_user.id,
         source="manual",
         status="pendiente_revision",

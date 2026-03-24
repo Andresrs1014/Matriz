@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Plus, Search, FolderKanban, Trash2, ClipboardList,
-  Calendar, Target, DollarSign, X, ChevronRight,
+  Calendar, Target, DollarSign, ChevronRight,
   ArrowUpCircle, CheckCircle2, PlayCircle, BadgeCheck,
   XCircle,
 } from "lucide-react"
@@ -21,6 +21,7 @@ import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import SuperadminApprovalModal from "@/components/projects/SuperadminApprovalModal"
 import SuperadminSalaryModal from "@/components/projects/SuperadminSalaryModal"
 import AdminROIForm from "@/components/projects/AdminROIForm"
+import ProjectSubmitForm from "@/components/projects/ProjectSubmitForm"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
 
@@ -41,16 +42,13 @@ const FLOW_TOTAL = 8
 type ModalType = "superaprobar" | "salario" | "roi" | "matrix" | null
 
 export default function ProjectsPage() {
-  const { projects, loading, createProject, deleteProject, fetchProjects } = useProjects()
+  const { projects, loading, deleteProject, fetchProjects } = useProjects()
   const { escalar, iniciarEvaluacion, rechazar } = useProjectActions()
   const { user } = useAuthStore()
   const navigate = useNavigate()
 
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [creating, setCreating] = useState(false)
 
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [modal, setModal] = useState<ModalType>(null)
@@ -72,17 +70,6 @@ export default function ProjectsPage() {
   async function handleModalSuccess() {
     closeModal()
     await fetchProjects()
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    if (!title.trim()) return
-    setCreating(true)
-    await createProject({ title: title.trim(), description: description.trim() || undefined })
-    setTitle("")
-    setDescription("")
-    setShowCreate(false)
-    setCreating(false)
   }
 
   // Acciones directas (sin modal)
@@ -191,46 +178,13 @@ export default function ProjectsPage() {
       {/* Modal crear proyecto */}
       <AnimatePresence>
         {showCreate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="glass-card p-6 w-full max-w-md"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-white font-semibold">Nuevo Proyecto</h2>
-                <button onClick={() => setShowCreate(false)} className="text-slate-500 hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div>
-                  <label className="text-xs text-slate-400 uppercase tracking-wide mb-1.5 block">Nombre *</label>
-                  <input value={title} onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ej: Automatización de despachos" required
-                    className="w-full px-4 py-2.5 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400 uppercase tracking-wide mb-1.5 block">Descripción</label>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                    rows={3} placeholder="Objetivo del proyecto..."
-                    className="w-full px-4 py-2.5 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric transition-all resize-none"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setShowCreate(false)}
-                    className="flex-1 py-2.5 rounded-lg border border-navy-600 text-slate-400 text-sm hover:text-white transition-all">
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={creating || !title.trim()}
-                    className="flex-1 py-2.5 rounded-lg bg-electric text-white text-sm font-medium hover:bg-electric-bright disabled:opacity-40 transition-all">
-                    {creating ? "Creando..." : "Crear proyecto"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+          <ProjectSubmitForm
+            onClose={() => setShowCreate(false)}
+            onSuccess={async () => {
+              setShowCreate(false)
+              await fetchProjects()
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -267,8 +221,10 @@ export default function ProjectsPage() {
                     </span>
                   </div>
 
-                  {project.description && (
-                    <p className="text-slate-400 text-xs leading-relaxed line-clamp-2">{project.description}</p>
+                  {(project.okr_objectives ?? project.description) && (
+                    <p className="text-slate-400 text-xs leading-relaxed line-clamp-2">
+                      {project.okr_objectives ?? project.description}
+                    </p>
                   )}
 
                   {/* Barra de progreso */}
@@ -298,6 +254,10 @@ export default function ProjectsPage() {
                       {new Date(project.created_at).toLocaleDateString("es-CO")}
                     </span>
                   </div>
+
+                  <p className="text-[11px] text-slate-500">
+                    Subió: <span className="text-slate-300">{project.submitted_by_name ?? `Usuario ${project.owner_id}`}</span>
+                  </p>
 
                   <div className="laser-line-h opacity-20 group-hover:opacity-50 transition-opacity" />
 
