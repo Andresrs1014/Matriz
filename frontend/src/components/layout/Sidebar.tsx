@@ -71,9 +71,17 @@ export default function Sidebar() {
       {/* User info + logout */}
       <div className="px-3 py-4 border-t border-navy-700/50 space-y-2">
         <div className="px-3 py-2 rounded-lg bg-navy-800/60">
-          <p className="text-xs font-medium text-white truncate">
-            {user?.full_name ?? user?.email}
-          </p>
+          <div className="flex items-center gap-2">
+            <img
+              src="/zymo01.png"
+              alt="avatar"
+              className="w-6 h-6 rounded-full border border-slate-600 bg-white object-cover"
+              style={{ background: 'black' }}
+            />
+            <span className="text-xs font-medium text-white truncate">
+              {user?.full_name ?? user?.email}
+            </span>
+          </div>
           <p className="text-[11px] text-slate-500 capitalize mt-0.5">{user?.role}</p>
         </div>
         <button
