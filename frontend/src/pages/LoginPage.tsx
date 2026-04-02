@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { Zap, Eye, EyeOff, LogIn } from "lucide-react"
@@ -9,12 +9,16 @@ export default function LoginPage() {
   const navigate   = useNavigate()
   const { setAuth } = useAuthStore()
 
-
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
   const [showPass, setShowPass] = useState(false)
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
+  const [version,  setVersion]  = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get("/health").then(({ data }) => setVersion(data.version)).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -74,7 +78,10 @@ export default function LoginPage() {
             <div className="w-14 h-14 rounded-2xl bg-electric/20 border border-electric/40 flex items-center justify-center shadow-glow-blue mb-4">
               <Zap size={28} className="text-electric" />
             </div>
-            <h1 className="text-2xl font-bold text-white glow-text">Project Matrix</h1>
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-2xl font-bold text-white glow-text">Project Matrix</h1>
+              {version && <span className="text-xs text-slate-500">v{version}</span>}
+            </div>
             <p className="text-sm text-slate-400 mt-1">Inicia sesión para continuar</p>
           </div>
 
