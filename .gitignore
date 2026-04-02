@@ -1,5 +1,6 @@
 # ── Documentación local (no sube al repo) ─────────────────────────────
 auditorias/
+_claude/
 
 # ── Python / Backend ──────────────────────────────────────────────────
 __pycache__/
