@@ -1,4 +1,5 @@
 // frontend/src/components/layout/Sidebar.tsx
+import { useEffect, useState } from "react"
 import { NavLink } from "react-router-dom"
 import {
   LayoutDashboard, FolderKanban, Target,
@@ -7,10 +8,16 @@ import {
 import { useAuthStore } from "@/store/authStore"
 import { isUsuario, canAccessSettings } from "@/lib/roles"
 import { cn } from "@/lib/utils"
+import api from "@/lib/api"
 
 export default function Sidebar() {
   const { user, clearAuth } = useAuthStore()
   const esUsuario = isUsuario(user)
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get("/health").then(({ data }) => setVersion(data.version)).catch(() => {})
+  }, [])
 
   const navItems = [
     {
@@ -46,7 +53,10 @@ export default function Sidebar() {
         <div className="w-8 h-8 rounded-lg bg-electric/20 border border-electric/30 flex items-center justify-center">
           <Zap className="w-4 h-4 text-electric" />
         </div>
-        <span className="text-white font-bold text-sm tracking-tight">Project Matrix</span>
+        <div className="flex flex-col">
+          <span className="text-white font-bold text-sm tracking-tight">Project Matrix</span>
+          {version && <span className="text-[10px] text-slate-500">v{version}</span>}
+        </div>
       </div>
 
       {/* Nav */}
