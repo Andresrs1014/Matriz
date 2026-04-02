@@ -57,7 +57,7 @@ export default function ROIWizard({ projectId, projectName, onClose }: Props) {
   const [parte1, setParte1] = useState<Parte1State>({ cargo: "", sede: "", num_personas: "", salario_base: "" })
   const [parte2, setParte2] = useState<Parte2State>({ horas_proceso_actual: "", horas_proyectadas: "" })
   const [result, setResult] = useState<ROIRead | null>(null)
-  const { submitting, submitROIParte1, submitROIParte2 } = useROI(projectId)
+  const { loading: submitting, submitROIParte1, submitROIParte2 } = useROI(projectId)
 
   function setParte1Field(field: keyof Parte1State) {
     return (v: string) => setParte1((prev) => ({ ...prev, [field]: v }))
