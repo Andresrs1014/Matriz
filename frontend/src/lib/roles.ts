@@ -75,6 +75,11 @@ export function canVerROI(user: User | null): boolean {
   return user?.role === "coordinador" || isAdmin(user)
 }
 
+/** Superadmin puede corregir el salario cuando ya fue ingresado pero está pendiente */
+export function canCorregirSalario(user: User | null, status: string): boolean {
+  return isSuperAdmin(user) && status === "pendiente_salario"
+}
+
 /** Admin o superadmin pueden rechazar en cualquier etapa */
 export function canRechazar(user: User | null, status: string): boolean {
   return isAdmin(user) && !["aprobado_final", "rechazado"].includes(status)

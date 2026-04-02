@@ -46,9 +46,14 @@ export interface ProjectQuestion {
 }
 
 // Payload para que el superadmin apruebe y asigne preguntas
+export interface CustomQuestionPayload {
+  text: string
+  axis: "impact" | "effort"
+}
+
 export interface SuperaprobacionPayload {
   question_ids: number[]
-  custom_questions: string[]
+  custom_questions: CustomQuestionPayload[]
 }
 
 // Payload para que el superadmin provea el salario

@@ -35,19 +35,20 @@ interface Props {
   projectTitle: string
   onClose: () => void
   onSuccess: () => void
-  // ← NUEVO: si el proyecto ya tiene salario registrado, permitir corrección
   showSalaryCorrection?: boolean
+  initialStep?: Step
 }
 
 type Step = "list" | "create" | "fix-salary"
 
 export default function SuperadminApprovalModal({
-  projectId, projectTitle, onClose, onSuccess, showSalaryCorrection = false
+  projectId, projectTitle, onClose, onSuccess,
+  showSalaryCorrection = false, initialStep = "list",
 }: Props) {
   const { superaprobar, loading: approving, error: approveError } = useProjectActions()
 
   // ── List step ──────────────────────────────────────────────────────────────
-  const [step, setStep] = useState<Step>("list")
+  const [step, setStep] = useState<Step>(initialStep)
   const [categories, setCategories] = useState<Category[]>([])
   const [questionCounts, setQuestionCounts] = useState<Record<number, number>>({})
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
@@ -62,6 +63,21 @@ export default function SuperadminApprovalModal({
   ])
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState("")
+
+  // ── Custom questions (adicionales al paquete) ─────────────────────────────
+  const [customQs, setCustomQs] = useState<NewQuestion[]>([])
+  const [showCustomQs, setShowCustomQs] = useState(false)
+
+  function addCustomQ() {
+    setCustomQs((prev) => [...prev, { text: "", axis: "impact" }])
+    setShowCustomQs(true)
+  }
+  function updateCustomQ(idx: number, field: keyof NewQuestion, value: string) {
+    setCustomQs((prev) => prev.map((q, i) => (i === idx ? { ...q, [field]: value } : q)))
+  }
+  function removeCustomQ(idx: number) {
+    setCustomQs((prev) => prev.filter((_, i) => i !== idx))
+  }
 
   // ── Fix salary step ────────────────────────────────────────────────────────
   const [salaryCargo, setSalaryCargo] = useState("")
@@ -167,9 +183,12 @@ export default function SuperadminApprovalModal({
     if (!selectedCategoryId) return
     const { data: questions } = await api.get(`/matrix/questions?category_id=${selectedCategoryId}`)
     const question_ids: number[] = questions.map((q: any) => q.id)
+    const filledCustomQs = customQs
+      .filter((q) => q.text.trim())
+      .map((q) => ({ text: q.text.trim(), axis: q.axis }))
     const result = await superaprobar(projectId, {
       question_ids,
-      custom_questions: [],
+      custom_questions: filledCustomQs,
     })
     if (result) onSuccess()
   }
@@ -278,6 +297,49 @@ export default function SuperadminApprovalModal({
                     })}
                   </div>
                 )}
+
+                {/* Preguntas adicionales para este proyecto */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-slate-400">
+                      Preguntas adicionales <span className="text-slate-600">(opcionales, solo para este proyecto)</span>
+                    </p>
+                    <button
+                      onClick={addCustomQ}
+                      className="flex items-center gap-1 text-xs text-slate-500 hover:text-electric transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> Agregar
+                    </button>
+                  </div>
+                  {showCustomQs && customQs.length > 0 && (
+                    <div className="space-y-2">
+                      {customQs.map((q, idx) => (
+                        <div key={idx} className="flex gap-2 items-start">
+                          <input
+                            value={q.text}
+                            onChange={(e) => updateCustomQ(idx, "text", e.target.value)}
+                            placeholder="Escribe la pregunta..."
+                            className="flex-1 bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-electric/50 transition-colors"
+                          />
+                          <select
+                            value={q.axis}
+                            onChange={(e) => updateCustomQ(idx, "axis", e.target.value)}
+                            className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none focus:border-electric/50 transition-colors"
+                          >
+                            <option value="impact">Impacto</option>
+                            <option value="effort">Esfuerzo</option>
+                          </select>
+                          <button
+                            onClick={() => removeCustomQ(idx)}
+                            className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Botón crear paquete nuevo */}
                 <button
