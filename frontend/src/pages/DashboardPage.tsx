@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import {
   FolderKanban, CheckCircle, Clock, BarChart2,
-  Target, TrendingUp, Zap, AlertCircle
+  Target, AlertCircle
 } from "lucide-react"
 import { useDashboard } from "@/hooks/useDashboard"
 import KPICard           from "@/components/dashboard/KPICard"

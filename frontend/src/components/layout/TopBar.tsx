@@ -1,4 +1,4 @@
-import { Bell, Wifi, WifiOff } from "lucide-react"
+import { Wifi, WifiOff } from "lucide-react"
 import { useProjectStore } from "@/store/projectStore"
 import { useAuthStore } from "@/store/authStore"
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
