@@ -15,7 +15,7 @@ import {
   isAdmin,
   canEscalar, canSuperaprobar, canIniciarEvaluacion,
   canMarcarEvaluado, canProveerSalario, canCompletarROI,
-  canRechazar,
+  canCorregirSalario, canRechazar,
 } from "@/lib/roles"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import SuperadminApprovalModal from "@/components/projects/SuperadminApprovalModal"
@@ -138,6 +138,14 @@ export default function ProjectsPage() {
         <button onClick={() => openModal(project, "roi")}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all">
           <DollarSign className="w-3.5 h-3.5" /> Completar ROI
+        </button>
+      )
+
+    if (canCorregirSalario(user, s))
+      return (
+        <button onClick={() => openModal(project, "superaprobar")}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium hover:bg-amber-500/20 transition-all">
+          <DollarSign className="w-3.5 h-3.5" /> Corregir salario
         </button>
       )
 
@@ -287,11 +295,12 @@ export default function ProjectsPage() {
       <AnimatePresence>
         {activeProject && modal === "superaprobar" && (
           <SuperadminApprovalModal
-          projectId={activeProject.id}
-          projectTitle={activeProject.title}
-          onClose={closeModal}
-          onSuccess={handleModalSuccess}
-          showSalaryCorrection={activeProject.status === "pendiente_salario"}  // ← solo esto
+            projectId={activeProject.id}
+            projectTitle={activeProject.title}
+            onClose={closeModal}
+            onSuccess={handleModalSuccess}
+            showSalaryCorrection={activeProject.status === "pendiente_salario"}
+            initialStep={activeProject.status === "pendiente_salario" ? "fix-salary" : "list"}
           />
           )}
 
