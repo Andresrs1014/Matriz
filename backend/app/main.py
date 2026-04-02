@@ -62,4 +62,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/health", tags=["Health"])
 def health():
-    return {"ok": True, "env": settings.env, "version": "0.2.0"}
+    return {"ok": True, "env": settings.env, "version": "0.2.1"}
