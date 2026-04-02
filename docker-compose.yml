@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: matrix_backend
+    restart: unless-stopped
+    environment:
+      - APP_NAME=Project Matrix API
+      - ENV=production
+      - DATABASE_URL=sqlite:///./data/matrix.db
+      - CORS_ORIGINS=http://localhost,http://localhost:80
+      - SECRET_KEY=${SECRET_KEY}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - SUPERADMIN_EMAIL=${SUPERADMIN_EMAIL:-admin@matrix.com}
+      - SUPERADMIN_PASSWORD=${SUPERADMIN_PASSWORD:-Admin1234!}
+    volumes:
+      - sqlite_data:/app/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+        VITE_WS_URL: ws://localhost/ws
+    container_name: matrix_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  sqlite_data:
