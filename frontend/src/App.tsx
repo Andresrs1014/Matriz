@@ -1,9 +1,10 @@
 // frontend/src/App.tsx
-import React, { Suspense } from "react"
+import React, { Suspense, useEffect, useRef } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
 import { useAuthStore } from "@/store/authStore"
 import { canAccessSettings, isUsuario, type Role } from "@/lib/roles"
 import AppLayout from "@/components/layout/AppLayout"
+import api from "@/lib/api"
 
 const LoginPage          = React.lazy(() => import("@/pages/LoginPage"))
 const DashboardPage      = React.lazy(() => import("@/pages/DashboardPage"))
@@ -12,6 +13,37 @@ const UserProjectsPage   = React.lazy(() => import("@/pages/UserProjectsPage"))
 const ProjectDetailPage  = React.lazy(() => import("@/pages/ProjectDetailShowcasePage"))
 const MatrixPage         = React.lazy(() => import("@/pages/MatrixPage"))
 const SettingsPage       = React.lazy(() => import("@/pages/SettingsPage"))
+
+function SSOHandler({ children }: { children: React.ReactNode }) {
+  const { setAuth, isAuthenticated } = useAuthStore()
+  const handled = useRef(false)
+
+  useEffect(() => {
+    if (handled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const ssoToken = params.get("token")
+    if (!ssoToken) return
+
+    handled.current = true
+    // Limpiar el token de la URL antes de procesarlo
+    params.delete("token")
+    const newSearch = params.toString()
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "")
+    window.history.replaceState({}, "", newUrl)
+
+    if (isAuthenticated) return  // ya hay sesión activa, no sobreescribir
+
+    api.post("/auth/sso", { token: ssoToken })
+      .then(({ data }) => {
+        setAuth(data.user, data.access_token)
+      })
+      .catch(() => {
+        // Token inválido — el usuario verá el login normalmente
+      })
+  }, [isAuthenticated, setAuth])
+
+  return <>{children}</>
+}
 
 function Spinner() {
   return (
@@ -45,6 +77,7 @@ export default function App() {
   const userIsUsuario = isUsuario(user)
 
   return (
+    <SSOHandler>
     <Suspense fallback={<Spinner />}>
       <Routes>
         {/* Pública */}
@@ -87,5 +120,6 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+    </SSOHandler>
   )
 }

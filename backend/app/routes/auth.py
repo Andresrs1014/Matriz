@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from typing import cast
 from sqlmodel import Session
+from jose.exceptions import JWTError
 from app.core.dependencies import get_db, get_current_user, require_coordinador, require_admin, require_superadmin
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_token
 from app.schemas.auth import (
     RegisterRequest, TokenResponse, MeResponse,
     UserListResponse, UpdateRoleRequest, UpdateUserRequest
@@ -11,7 +13,8 @@ from app.schemas.auth import (
 from app.services.auth_service import (
     create_user, authenticate_user, get_all_users, get_archived_users,
     get_user_by_id, update_user_role, update_user,
-    deactivate_user, reactivate_user, permanent_delete_user
+    deactivate_user, reactivate_user, permanent_delete_user,
+    get_user_by_email,
 )
 from app.models.user import User
 
@@ -52,6 +55,68 @@ def register(
         role=payload.role,
     )
     return _to_me(user)
+
+
+class SSORequest(BaseModel):
+    token: str
+
+class SSOResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: MeResponse
+
+
+@router.post("/sso", response_model=SSOResponse)
+def sso_login(payload: SSORequest, db: Session = Depends(get_db)):
+    """Acepta un JWT de la intranet ZYMO, valida con la misma SECRET_KEY
+    y devuelve un token de sesión de Matriz. Crea el usuario si no existe."""
+    try:
+        claims = decode_token(payload.token)
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de intranet inválido o expirado.",
+        )
+    email = claims.get("sub")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token sin sujeto.")
+
+    user = get_user_by_email(db, email)
+    if not user:
+        # Auto-crear con rol mínimo; el admin de Matriz puede elevar después
+        user = create_user(
+            db,
+            email=email,
+            password="__sso__",          # contraseña inutilizable (hash vacío no verifica)
+            full_name=claims.get("full_name"),
+            area=claims.get("area"),
+            role="usuario",
+        )
+        # Reemplazar hashed_password con un marcador que nunca verifica
+        from app.core.security import hash_password
+        user.hashed_password = hash_password("__sso_disabled__")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario inactivo.")
+
+    access_token = create_access_token(
+        subject=user.email,
+        extra={"role": user.role, "area": user.area},
+    )
+    return SSOResponse(
+        access_token=access_token,
+        user=MeResponse(
+            id=cast(int, user.id),
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            area=user.area,
+            is_active=user.is_active,
+        ),
+    )
 
 
 @router.post("/token", response_model=TokenResponse)
