@@ -1,7 +1,7 @@
 // frontend/src/components/projects/ProjectSubmitForm.tsx
 import { useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
-import { X, Send, Loader2, Plus, UserRound, Calendar, Sparkles, FileText, Trash2, Save } from "lucide-react"
+import { X, Send, Loader2, Plus, UserRound, Calendar, Sparkles, Trash2, Save } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
 
