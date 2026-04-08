@@ -18,6 +18,7 @@ from app.routes.roi       import router as roi_router
 from app.seeds.questions_seed import seed_matrix_questions
 from app.seeds.admin_seed     import seed_superadmin
 from app.routes.comments import router as comments_router
+from app.routes.drafts import router as drafts_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +49,7 @@ app.include_router(dashboard_router)
 app.include_router(settings_router)
 app.include_router(roi_router)
 app.include_router(comments_router)
+app.include_router(drafts_router)
 
 
 @app.websocket("/ws")
