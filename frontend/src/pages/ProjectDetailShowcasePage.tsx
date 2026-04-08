@@ -4,10 +4,13 @@ import { motion } from "framer-motion"
 import {
   ArrowLeft,
   Calendar,
+  CalendarClock,
   ClipboardList,
   Lock,
   MessageCircle,
   Target,
+  ThumbsDown,
+  ThumbsUp,
   TrendingUp,
   UserRound,
   Users,
@@ -218,6 +221,19 @@ export default function ProjectDetailShowcasePage() {
                     label="Subido por"
                     value={project.submitted_by_name ?? `Usuario ${project.owner_id}`}
                   />
+                  {project.okr_creator && (
+                    <InfoTile
+                      icon={<UserRound className="h-4 w-4 text-amber-400" />}
+                      label="¿Quién creó el OKR?"
+                      value={project.okr_creator}
+                    />
+                  )}
+                  {project.due_date && (
+                    <InfoTileDueDate dueDate={project.due_date} />
+                  )}
+                  {project.okr_productive !== null && project.okr_productive !== undefined && (
+                    <InfoTileProductivity productive={project.okr_productive} />
+                  )}
                 </div>
 
                 {collaborators.length > 0 && (
@@ -463,6 +479,58 @@ function EmptyPanel({
         <p className="text-center text-sm">{message}</p>
         {helper && <p className="max-w-xs text-center text-xs text-slate-500">{helper}</p>}
       </div>
+    </div>
+  )
+}
+
+function InfoTileDueDate({ dueDate }: { dueDate: string }) {
+  const date = new Date(dueDate)
+  const isExpired = date < new Date()
+  return (
+    <div className={cn(
+      "rounded-2xl border p-4",
+      isExpired
+        ? "border-red-500/30 bg-red-500/10"
+        : "border-amber-500/30 bg-amber-500/10"
+    )}>
+      <div className={cn(
+        "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]",
+        isExpired ? "text-red-400" : "text-amber-400"
+      )}>
+        <CalendarClock className="h-4 w-4" />
+        <span>Fecha de vencimiento (3 meses)</span>
+      </div>
+      <p className={cn("text-sm font-medium", isExpired ? "text-red-300" : "text-amber-200")}>
+        {date.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })}
+      </p>
+      <p className={cn("mt-0.5 text-xs", isExpired ? "text-red-500" : "text-amber-500")}>
+        {isExpired ? "Plazo vencido" : "En curso"}
+      </p>
+    </div>
+  )
+}
+
+function InfoTileProductivity({ productive }: { productive: boolean }) {
+  return (
+    <div className={cn(
+      "rounded-2xl border p-4",
+      productive
+        ? "border-emerald-500/30 bg-emerald-500/10"
+        : "border-red-500/30 bg-red-500/10"
+    )}>
+      <div className={cn(
+        "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]",
+        productive ? "text-emerald-400" : "text-red-400"
+      )}>
+        {productive
+          ? <ThumbsUp className="h-4 w-4" />
+          : <ThumbsDown className="h-4 w-4" />
+        }
+        <span>Criterio de productividad</span>
+      </div>
+      <p className={cn("text-sm font-medium", productive ? "text-emerald-300" : "text-red-300")}>
+        {productive ? "Productivo" : "No productivo"}
+      </p>
     </div>
   )
 }
