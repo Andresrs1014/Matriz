@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from sqlmodel import Session, select, func, col
 from app.models.project import Project
 from app.models.matrix import MatrixEvaluation, QuestionCategory
@@ -40,12 +41,34 @@ def get_dashboard_stats(db: Session, user_id: int, role: str) -> dict:
             .where(col(MatrixEvaluation.project_id).in_(project_ids))
         ).one()
 
+    # ── Métricas de productividad OKR ──────────────────────────────────────
+    now = datetime.now(timezone.utc)
+    finalized = [p for p in projects if p.status == "aprobado_final"]
+    productive_count = sum(1 for p in finalized if p.okr_productive is True)
+    not_productive_count = sum(1 for p in finalized if p.okr_productive is False)
+    expired_count = sum(
+        1 for p in projects
+        if p.due_date is not None and p.due_date.replace(tzinfo=timezone.utc) < now
+    )
+    # OKRs con due_date definida y no vencidos
+    upcoming_count = sum(
+        1 for p in projects
+        if p.due_date is not None and p.due_date.replace(tzinfo=timezone.utc) >= now
+    )
+
     return {
-        "total_projects":     total_projects,
-        "evaluated_projects": evaluated_projects,
-        "pending_evaluation": pending_evaluation,
-        "total_evaluations":  total_evaluations,
-        "scope":              "global" if is_admin else "personal",
+        "total_projects":       total_projects,
+        "evaluated_projects":   evaluated_projects,
+        "pending_evaluation":   pending_evaluation,
+        "total_evaluations":    total_evaluations,
+        "scope":                "global" if is_admin else "personal",
+        # Productividad
+        "total_finalized":      len(finalized),
+        "productive_count":     productive_count,
+        "not_productive_count": not_productive_count,
+        "pending_productivity": len(finalized) - productive_count - not_productive_count,
+        "expired_okrs":         expired_count,
+        "upcoming_okrs":        upcoming_count,
     }
 
 

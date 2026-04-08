@@ -1,6 +1,6 @@
 // frontend/src/components/projects/ProjectSubmitForm.tsx
 import { useMemo, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { X, Send, Loader2, Plus, UserRound, Calendar, Sparkles } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
@@ -57,6 +57,7 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
   const [resources, setResources] = useState("")
   const [fiveWhys, setFiveWhys] = useState("")
   const [measurementMethods, setMeasurementMethods] = useState("")
+  const [okrCreator, setOkrCreator] = useState("")
   const [collaboratorInput, setCollaboratorInput] = useState("")
   const [collaborators, setCollaborators] = useState<string[]>([uploaderName])
   const [error, setError] = useState("")
@@ -100,6 +101,7 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
         resources: resources.trim() || null,
         five_whys: fiveWhys.trim() || null,
         measurement_methods: measurementMethods.trim() || null,
+        okr_creator: okrCreator.trim() || null,
         collaborators,
       })
       onSuccess()
@@ -111,14 +113,13 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
   }
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      >
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -163,6 +164,18 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ej: Optimización del proceso de facturación"
+                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-electric/50 transition-colors"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                ¿Quién Creó El OKR?
+              </label>
+              <input
+                value={okrCreator}
+                onChange={(e) => setOkrCreator(e.target.value)}
+                placeholder="Nombre de la persona que originó la idea del OKR"
                 className="w-full bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-electric/50 transition-colors"
               />
             </div>
@@ -278,7 +291,6 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
             </div>
           </form>
         </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    </motion.div>
   )
 }

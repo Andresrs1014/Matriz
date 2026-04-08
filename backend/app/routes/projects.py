@@ -1,7 +1,7 @@
 # backend/app/routes/projects.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, col
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 from app.core.dependencies import (
     get_db, get_current_user,
@@ -15,6 +15,7 @@ from app.schemas.project import (
     ProjectCreate, ProjectRead,
     SuperaprobacionInput, SalarioInput,
     DatosOperacionalesInput, ProjectQuestionRead,
+    OkrProductiveInput,
 )
 from app.services.project_service import (
     get_project_any, create_project, delete_project, list_all_projects,
@@ -56,7 +57,10 @@ def _to_read(p: Project) -> ProjectRead:
         five_whys=p.five_whys,
         measurement_methods=p.measurement_methods,
         submitted_by_name=p.submitted_by_name,
+        okr_creator=p.okr_creator,
         collaborators=_parse_collaborators(p.collaborators_json),
+        due_date=p.due_date,
+        okr_productive=p.okr_productive,
         status=p.status,
         source=p.source,
         owner_id=p.owner_id,
@@ -104,6 +108,7 @@ async def create_project_endpoint(
         for name in payload.collaborators
         if isinstance(name, str) and name.strip()
     ]
+    now = datetime.now(timezone.utc)
     project = Project(
         title=payload.title,
         description=payload.description,
@@ -114,7 +119,9 @@ async def create_project_endpoint(
         five_whys=payload.five_whys,
         measurement_methods=payload.measurement_methods,
         submitted_by_name=current_user.full_name or current_user.email,
+        okr_creator=payload.okr_creator or current_user.full_name or current_user.email,
         collaborators_json=json.dumps(collaborators, ensure_ascii=False),
+        due_date=now + timedelta(days=90),
         owner_id=current_user.id,
         source="manual",
         status="pendiente_revision",
@@ -484,4 +491,27 @@ async def rechazar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.rechazado", {"id": project_id})
+    return _to_read(project)
+
+
+# ── Marcar productividad del OKR ──────────────────────────────────────────────
+@router.patch("/{project_id}/productividad", response_model=ProjectRead)
+async def marcar_productividad(
+    project_id: int,
+    payload: OkrProductiveInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """admin/superadmin pueden marcar si un OKR fue productivo o no."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    project.okr_productive = payload.productive
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    await ws_manager.broadcast("project.productividad", {
+        "id": project_id, "productive": payload.productive
+    })
     return _to_read(project)
