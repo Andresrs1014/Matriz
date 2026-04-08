@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Lock,
   MessageCircle,
+  Pencil,
   Target,
   ThumbsDown,
   ThumbsUp,
@@ -229,7 +230,12 @@ export default function ProjectDetailShowcasePage() {
                     />
                   )}
                   {project.due_date && (
-                    <InfoTileDueDate dueDate={project.due_date} />
+                    <InfoTileDueDate
+                      dueDate={project.due_date}
+                      projectId={project.id}
+                      canEdit={canEvaluate}
+                      onUpdated={fetchData}
+                    />
                   )}
                   {project.okr_productive !== null && project.okr_productive !== undefined && (
                     <InfoTileProductivity productive={project.okr_productive} />
@@ -483,52 +489,106 @@ function EmptyPanel({
   )
 }
 
-function InfoTileDueDate({ dueDate }: { dueDate: string }) {
+function InfoTileDueDate({
+  dueDate,
+  projectId,
+  canEdit,
+  onUpdated,
+}: {
+  dueDate: string
+  projectId: number
+  canEdit: boolean
+  onUpdated: () => void
+}) {
   const date = new Date(dueDate)
   const isExpired = date < new Date()
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  // input value en formato YYYY-MM-DD
+  const [inputVal, setInputVal] = useState(
+    date.toISOString().slice(0, 10)
+  )
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus()
+  }, [editing])
+
+  async function handleSave() {
+    if (!inputVal) return
+    setSaving(true)
+    try {
+      await api.patch(`/projects/${projectId}/due-date`, { due_date: inputVal })
+      onUpdated()
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <div className={cn(
-      "rounded-2xl border p-4",
-      isExpired
-        ? "border-red-500/30 bg-red-500/10"
-        : "border-amber-500/30 bg-amber-500/10"
-    )}>
-      <div className={cn(
-        "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]",
-        isExpired ? "text-red-400" : "text-amber-400"
-      )}>
-        <CalendarClock className="h-4 w-4" />
-        <span>Fecha de vencimiento (3 meses)</span>
+    <div className="rounded-2xl border border-slate-700/60 bg-slate-900/45 p-4">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        <CalendarClock className="h-4 w-4 text-electric" />
+        <span>Fecha de vencimiento</span>
+        {canEdit && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="ml-auto text-slate-600 hover:text-electric transition-colors"
+            title="Cambiar fecha"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
       </div>
-      <p className={cn("text-sm font-medium", isExpired ? "text-red-300" : "text-amber-200")}>
-        {date.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })}
-      </p>
-      <p className={cn("mt-0.5 text-xs", isExpired ? "text-red-500" : "text-amber-500")}>
-        {isExpired ? "Plazo vencido" : "En curso"}
-      </p>
+      {editing ? (
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="date"
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-electric transition-colors"
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="text-xs text-electric hover:text-electric-bright disabled:opacity-40 transition-colors font-medium"
+          >
+            {saving ? "..." : "Guardar"}
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-slate-200">
+            {date.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })}
+          </p>
+          <p className={cn("mt-0.5 text-xs", isExpired ? "text-red-400" : "text-slate-500")}>
+            {isExpired ? "Plazo vencido" : "En curso"}
+          </p>
+        </>
+      )}
     </div>
   )
 }
 
 function InfoTileProductivity({ productive }: { productive: boolean }) {
   return (
-    <div className={cn(
-      "rounded-2xl border p-4",
-      productive
-        ? "border-emerald-500/30 bg-emerald-500/10"
-        : "border-red-500/30 bg-red-500/10"
-    )}>
-      <div className={cn(
-        "mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]",
-        productive ? "text-emerald-400" : "text-red-400"
-      )}>
+    <div className="rounded-2xl border border-slate-700/60 bg-slate-900/45 p-4">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
         {productive
-          ? <ThumbsUp className="h-4 w-4" />
-          : <ThumbsDown className="h-4 w-4" />
+          ? <ThumbsUp className="h-4 w-4 text-electric" />
+          : <ThumbsDown className="h-4 w-4 text-electric" />
         }
         <span>Criterio de productividad</span>
       </div>
-      <p className={cn("text-sm font-medium", productive ? "text-emerald-300" : "text-red-300")}>
+      <p className="text-sm text-slate-200">
         {productive ? "Productivo" : "No productivo"}
       </p>
     </div>

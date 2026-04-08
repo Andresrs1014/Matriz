@@ -15,7 +15,7 @@ from app.schemas.project import (
     ProjectCreate, ProjectRead,
     SuperaprobacionInput, SalarioInput,
     DatosOperacionalesInput, ProjectQuestionRead,
-    OkrProductiveInput,
+    OkrProductiveInput, DueDateInput,
 )
 from app.services.project_service import (
     get_project_any, create_project, delete_project, list_all_projects,
@@ -514,4 +514,33 @@ async def marcar_productividad(
     await ws_manager.broadcast("project.productividad", {
         "id": project_id, "productive": payload.productive
     })
+    return _to_read(project)
+
+
+# ── Cambiar fecha de vencimiento del OKR ─────────────────────────────────────
+@router.patch("/{project_id}/due-date", response_model=ProjectRead)
+async def actualizar_due_date(
+    project_id: int,
+    payload: DueDateInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """admin/superadmin pueden ajustar la fecha de vencimiento del OKR."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    try:
+        from datetime import date as _date
+        parsed = datetime.combine(
+            _date.fromisoformat(payload.due_date),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD.")
+    project.due_date = parsed
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
     return _to_read(project)

@@ -70,6 +70,9 @@ class DatosOperacionalesInput(BaseModel):
 class OkrProductiveInput(BaseModel):
     productive: bool
 
+class DueDateInput(BaseModel):
+    due_date: str  # YYYY-MM-DD
+
 class ProjectQuestionRead(BaseModel):
     id: int
     project_id: int
