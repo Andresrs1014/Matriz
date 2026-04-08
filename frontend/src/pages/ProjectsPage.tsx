@@ -6,7 +6,7 @@ import {
   Plus, Search, FolderKanban, Trash2, ClipboardList,
   Calendar, Target, DollarSign, ChevronRight,
   ArrowUpCircle, CheckCircle2, PlayCircle, BadgeCheck,
-  XCircle, ThumbsUp, ThumbsDown,
+  XCircle, ThumbsUp, ThumbsDown, Pencil,
 } from "lucide-react"
 import { useProjects } from "@/hooks/useProjects"
 import { useProjectActions } from "@/hooks/useProjectActions"
@@ -22,6 +22,7 @@ import SuperadminApprovalModal from "@/components/projects/SuperadminApprovalMod
 import SuperadminSalaryModal from "@/components/projects/SuperadminSalaryModal"
 import AdminROIForm from "@/components/projects/AdminROIForm"
 import ProjectSubmitForm from "@/components/projects/ProjectSubmitForm"
+import ProjectEditModal from "@/components/projects/ProjectEditModal"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
 
@@ -39,7 +40,7 @@ const STATUS_CONFIG: Record<string, { label: string; class: string; step: number
 
 const FLOW_TOTAL = 8
 
-type ModalType = "superaprobar" | "salario" | "roi" | "matrix" | null
+type ModalType = "superaprobar" | "salario" | "roi" | "matrix" | "edit" | null
 
 export default function ProjectsPage() {
   const { projects, loading, deleteProject, fetchProjects } = useProjects()
@@ -345,6 +346,13 @@ export default function ProjectsPage() {
                       </button>
                     )}
                     {isAdmin(user) && (
+                      <button onClick={() => openModal(project, "edit")}
+                        className="p-2 rounded-lg text-slate-600 hover:text-electric hover:bg-electric/10 border border-transparent hover:border-electric/20 transition-all"
+                        title="Editar OKR">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isAdmin(user) && (
                       <button onClick={() => deleteProject(project.id)}
                         className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all">
                         <Trash2 className="w-4 h-4" />
@@ -392,6 +400,13 @@ export default function ProjectsPage() {
             projectId={activeProject.id}
             projectName={activeProject.title}
             onClose={closeModal}
+          />
+        )}
+        {activeProject && modal === "edit" && (
+          <ProjectEditModal
+            project={activeProject}
+            onClose={closeModal}
+            onSuccess={handleModalSuccess}
           />
         )}
       </AnimatePresence>

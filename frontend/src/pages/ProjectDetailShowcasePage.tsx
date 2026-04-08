@@ -17,6 +17,7 @@ import {
   Users,
   Zap,
 } from "lucide-react"
+
 import api from "@/lib/api"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
 import { cn } from "@/lib/utils"
@@ -27,6 +28,7 @@ import { ROI_QUADRANT_CONFIG, type ROICuadranteKey, type ROIRead } from "@/types
 import ProjectChat from "@/components/chat/ProjectChat"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
+import ProjectEditModal from "@/components/projects/ProjectEditModal"
 
 interface Evaluation {
   id: number
@@ -72,6 +74,7 @@ export default function ProjectDetailShowcasePage() {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [evaluating, setEvaluating] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const esUsuario = isUsuario(user)
   const canSeeROI = canVerROI(user)
@@ -191,15 +194,26 @@ export default function ProjectDetailShowcasePage() {
                     </div>
                   </div>
 
-                  {canEvaluate && project.status === "en_evaluacion" && (
-                    <button
-                      onClick={() => setEvaluating(true)}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-electric/30 bg-electric/10 px-4 py-3 text-sm font-medium text-electric transition-all hover:bg-electric/20"
-                    >
-                      <Target className="h-4 w-4" />
-                      {latestEval ? "Re-evaluar" : "Evaluar Impacto/Esfuerzo"}
-                    </button>
-                  )}
+                  <div className="flex gap-2 flex-wrap">
+                    {canEvaluate && (
+                      <button
+                        onClick={() => setEditing(true)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-600/50 bg-slate-800/60 px-4 py-3 text-sm font-medium text-slate-300 transition-all hover:bg-slate-700/60 hover:text-white"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar OKR
+                      </button>
+                    )}
+                    {canEvaluate && project.status === "en_evaluacion" && (
+                      <button
+                        onClick={() => setEvaluating(true)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-electric/30 bg-electric/10 px-4 py-3 text-sm font-medium text-electric transition-all hover:bg-electric/20"
+                      >
+                        <Target className="h-4 w-4" />
+                        {latestEval ? "Re-evaluar" : "Evaluar Impacto/Esfuerzo"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -438,6 +452,13 @@ export default function ProjectDetailShowcasePage() {
             setEvaluating(false)
             fetchData()
           }}
+        />
+      )}
+      {editing && (
+        <ProjectEditModal
+          project={project}
+          onClose={() => setEditing(false)}
+          onSuccess={() => { setEditing(false); fetchData() }}
         />
       )}
     </>

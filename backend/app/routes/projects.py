@@ -15,7 +15,7 @@ from app.schemas.project import (
     ProjectCreate, ProjectRead,
     SuperaprobacionInput, SalarioInput,
     DatosOperacionalesInput, ProjectQuestionRead,
-    OkrProductiveInput, DueDateInput,
+    OkrProductiveInput, DueDateInput, ProjectEditInput,
 )
 from app.services.project_service import (
     get_project_any, create_project, delete_project, list_all_projects,
@@ -147,6 +147,44 @@ def get_project(
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
     if current_user.role not in ("admin", "superadmin", "coordinador") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
+    return _to_read(project)
+
+
+@router.patch("/{project_id}", response_model=ProjectRead)
+async def edit_project(
+    project_id: int,
+    payload: ProjectEditInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """admin/superadmin pueden editar los campos del OKR en cualquier estado."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    if payload.title is not None:
+        project.title = payload.title.strip() or project.title
+    if payload.okr_objectives is not None:
+        project.okr_objectives = payload.okr_objectives or None
+        project.description = payload.okr_objectives or project.description
+    if payload.key_results is not None:
+        project.key_results = payload.key_results or None
+    if payload.key_actions is not None:
+        project.key_actions = payload.key_actions or None
+    if payload.resources is not None:
+        project.resources = payload.resources or None
+    if payload.five_whys is not None:
+        project.five_whys = payload.five_whys or None
+    if payload.measurement_methods is not None:
+        project.measurement_methods = payload.measurement_methods or None
+    if payload.okr_creator is not None:
+        project.okr_creator = payload.okr_creator or None
+    if payload.collaborators is not None:
+        project.collaborators_json = json.dumps(payload.collaborators, ensure_ascii=False)
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    await ws_manager.broadcast("project.updated", {"id": project_id})
     return _to_read(project)
 
 

@@ -73,6 +73,17 @@ class OkrProductiveInput(BaseModel):
 class DueDateInput(BaseModel):
     due_date: str  # YYYY-MM-DD
 
+class ProjectEditInput(BaseModel):
+    title: str | None = None
+    okr_objectives: str | None = None
+    key_results: str | None = None
+    key_actions: str | None = None
+    resources: str | None = None
+    five_whys: str | None = None
+    measurement_methods: str | None = None
+    okr_creator: str | None = None
+    collaborators: list[str] | None = None
+
 class ProjectQuestionRead(BaseModel):
     id: int
     project_id: int
