@@ -55,6 +55,14 @@ def run_migrations() -> None:
         ("project.collaborators_json",
          "ALTER TABLE project ADD COLUMN collaborators_json TEXT"),
 
+        # ── Columnas OKR v2 ─────────────────────────────────────────────────
+        ("project.okr_creator",
+         "ALTER TABLE project ADD COLUMN okr_creator TEXT"),
+        ("project.due_date",
+         "ALTER TABLE project ADD COLUMN due_date DATETIME"),
+        ("project.okr_productive",
+         "ALTER TABLE project ADD COLUMN okr_productive INTEGER"),  # NULL=sin definir, 1=productivo, 0=no productivo
+
         # ── ROI: columnas renombradas / nuevas ──────────────────────────────
         # Agregar columna con el nombre nuevo (horas_proceso_nuevo)
         ("roievaluation.horas_proceso_nuevo",

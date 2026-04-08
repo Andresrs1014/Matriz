@@ -6,7 +6,7 @@ import {
   Plus, Search, FolderKanban, Trash2, ClipboardList,
   Calendar, Target, DollarSign, ChevronRight,
   ArrowUpCircle, CheckCircle2, PlayCircle, BadgeCheck,
-  XCircle,
+  XCircle, ThumbsUp, ThumbsDown, Pencil,
 } from "lucide-react"
 import { useProjects } from "@/hooks/useProjects"
 import { useProjectActions } from "@/hooks/useProjectActions"
@@ -22,6 +22,7 @@ import SuperadminApprovalModal from "@/components/projects/SuperadminApprovalMod
 import SuperadminSalaryModal from "@/components/projects/SuperadminSalaryModal"
 import AdminROIForm from "@/components/projects/AdminROIForm"
 import ProjectSubmitForm from "@/components/projects/ProjectSubmitForm"
+import ProjectEditModal from "@/components/projects/ProjectEditModal"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
 
@@ -39,7 +40,7 @@ const STATUS_CONFIG: Record<string, { label: string; class: string; step: number
 
 const FLOW_TOTAL = 8
 
-type ModalType = "superaprobar" | "salario" | "roi" | "matrix" | null
+type ModalType = "superaprobar" | "salario" | "roi" | "matrix" | "edit" | null
 
 export default function ProjectsPage() {
   const { projects, loading, deleteProject, fetchProjects } = useProjects()
@@ -49,6 +50,19 @@ export default function ProjectsPage() {
 
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
+  const [markingProductivity, setMarkingProductivity] = useState<number | null>(null)
+
+  async function handleMarcarProductividad(projectId: number, productive: boolean) {
+    setMarkingProductivity(projectId)
+    try {
+      await import("@/lib/api").then(({ default: api }) =>
+        api.patch(`/projects/${projectId}/productividad`, { productive })
+      )
+      await fetchProjects()
+    } finally {
+      setMarkingProductivity(null)
+    }
+  }
 
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [modal, setModal] = useState<ModalType>(null)
@@ -261,11 +275,65 @@ export default function ProjectsPage() {
                       <Calendar className="w-3 h-3" />
                       {new Date(project.created_at).toLocaleDateString("es-CO")}
                     </span>
+                    {project.due_date && (
+                      <span className={cn(
+                        "flex items-center gap-1",
+                        new Date(project.due_date) < new Date() ? "text-red-400" : "text-amber-400"
+                      )}>
+                        <Calendar className="w-3 h-3" />
+                        Vence {new Date(project.due_date).toLocaleDateString("es-CO")}
+                      </span>
+                    )}
                   </div>
 
-                  <p className="text-[11px] text-slate-500">
-                    Subió: <span className="text-slate-300">{project.submitted_by_name ?? `Usuario ${project.owner_id}`}</span>
-                  </p>
+                  <div className="space-y-0.5">
+                    {project.okr_creator && (
+                      <p className="text-[11px] text-slate-500">
+                        Creó el OKR: <span className="text-slate-300">{project.okr_creator}</span>
+                      </p>
+                    )}
+                    <p className="text-[11px] text-slate-500">
+                      Subió: <span className="text-slate-300">{project.submitted_by_name ?? `Usuario ${project.owner_id}`}</span>
+                    </p>
+                    {project.okr_productive !== null && project.okr_productive !== undefined && (
+                      <span className={cn(
+                        "inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border",
+                        project.okr_productive
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/20 text-red-400 border-red-500/30"
+                      )}>
+                        {project.okr_productive ? "Productivo" : "No productivo"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Botones marcar productividad — solo admin, solo aprobado_final */}
+                  {isAdmin(user) && project.status === "aprobado_final" && (
+                    <div className="flex gap-2">
+                      <button
+                        disabled={markingProductivity === project.id}
+                        onClick={() => handleMarcarProductividad(project.id, true)}
+                        className={cn(
+                          "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                          project.okr_productive === true
+                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                            : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-400"
+                        )}>
+                        <ThumbsUp className="w-3 h-3" /> Productivo
+                      </button>
+                      <button
+                        disabled={markingProductivity === project.id}
+                        onClick={() => handleMarcarProductividad(project.id, false)}
+                        className={cn(
+                          "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                          project.okr_productive === false
+                            ? "bg-red-500/20 border-red-500/40 text-red-300"
+                            : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
+                        )}>
+                        <ThumbsDown className="w-3 h-3" /> No productivo
+                      </button>
+                    </div>
+                  )}
 
                   <div className="laser-line-h opacity-20 group-hover:opacity-50 transition-opacity" />
 
@@ -275,6 +343,13 @@ export default function ProjectsPage() {
                       <button onClick={() => handleRechazar(project)}
                         className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all">
                         <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isAdmin(user) && (
+                      <button onClick={() => openModal(project, "edit")}
+                        className="p-2 rounded-lg text-slate-600 hover:text-electric hover:bg-electric/10 border border-transparent hover:border-electric/20 transition-all"
+                        title="Editar OKR">
+                        <Pencil className="w-4 h-4" />
                       </button>
                     )}
                     {isAdmin(user) && (
@@ -325,6 +400,13 @@ export default function ProjectsPage() {
             projectId={activeProject.id}
             projectName={activeProject.title}
             onClose={closeModal}
+          />
+        )}
+        {activeProject && modal === "edit" && (
+          <ProjectEditModal
+            project={activeProject}
+            onClose={closeModal}
+            onSuccess={handleModalSuccess}
           />
         )}
       </AnimatePresence>

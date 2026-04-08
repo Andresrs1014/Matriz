@@ -10,7 +10,10 @@ export interface Project {
   five_whys: string | null
   measurement_methods: string | null
   submitted_by_name: string | null
+  okr_creator: string | null
   collaborators: string[]
+  due_date: string | null
+  okr_productive: boolean | null
   status: string
   source: string
   owner_id: number
@@ -32,6 +35,7 @@ export interface ProjectCreate {
   resources?: string
   five_whys?: string
   measurement_methods?: string
+  okr_creator?: string
   collaborators?: string[]
 }
 

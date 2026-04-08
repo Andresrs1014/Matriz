@@ -1,7 +1,7 @@
 # backend/app/routes/projects.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, col
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 from app.core.dependencies import (
     get_db, get_current_user,
@@ -15,6 +15,7 @@ from app.schemas.project import (
     ProjectCreate, ProjectRead,
     SuperaprobacionInput, SalarioInput,
     DatosOperacionalesInput, ProjectQuestionRead,
+    OkrProductiveInput, DueDateInput, ProjectEditInput,
 )
 from app.services.project_service import (
     get_project_any, create_project, delete_project, list_all_projects,
@@ -56,7 +57,10 @@ def _to_read(p: Project) -> ProjectRead:
         five_whys=p.five_whys,
         measurement_methods=p.measurement_methods,
         submitted_by_name=p.submitted_by_name,
+        okr_creator=p.okr_creator,
         collaborators=_parse_collaborators(p.collaborators_json),
+        due_date=p.due_date,
+        okr_productive=p.okr_productive,
         status=p.status,
         source=p.source,
         owner_id=p.owner_id,
@@ -104,6 +108,7 @@ async def create_project_endpoint(
         for name in payload.collaborators
         if isinstance(name, str) and name.strip()
     ]
+    now = datetime.now(timezone.utc)
     project = Project(
         title=payload.title,
         description=payload.description,
@@ -114,7 +119,9 @@ async def create_project_endpoint(
         five_whys=payload.five_whys,
         measurement_methods=payload.measurement_methods,
         submitted_by_name=current_user.full_name or current_user.email,
+        okr_creator=payload.okr_creator or current_user.full_name or current_user.email,
         collaborators_json=json.dumps(collaborators, ensure_ascii=False),
+        due_date=now + timedelta(days=90),
         owner_id=current_user.id,
         source="manual",
         status="pendiente_revision",
@@ -140,6 +147,44 @@ def get_project(
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
     if current_user.role not in ("admin", "superadmin", "coordinador") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
+    return _to_read(project)
+
+
+@router.patch("/{project_id}", response_model=ProjectRead)
+async def edit_project(
+    project_id: int,
+    payload: ProjectEditInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """admin/superadmin pueden editar los campos del OKR en cualquier estado."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    if payload.title is not None:
+        project.title = payload.title.strip() or project.title
+    if payload.okr_objectives is not None:
+        project.okr_objectives = payload.okr_objectives or None
+        project.description = payload.okr_objectives or project.description
+    if payload.key_results is not None:
+        project.key_results = payload.key_results or None
+    if payload.key_actions is not None:
+        project.key_actions = payload.key_actions or None
+    if payload.resources is not None:
+        project.resources = payload.resources or None
+    if payload.five_whys is not None:
+        project.five_whys = payload.five_whys or None
+    if payload.measurement_methods is not None:
+        project.measurement_methods = payload.measurement_methods or None
+    if payload.okr_creator is not None:
+        project.okr_creator = payload.okr_creator or None
+    if payload.collaborators is not None:
+        project.collaborators_json = json.dumps(payload.collaborators, ensure_ascii=False)
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    await ws_manager.broadcast("project.updated", {"id": project_id})
     return _to_read(project)
 
 
@@ -484,4 +529,56 @@ async def rechazar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.rechazado", {"id": project_id})
+    return _to_read(project)
+
+
+# ── Marcar productividad del OKR ──────────────────────────────────────────────
+@router.patch("/{project_id}/productividad", response_model=ProjectRead)
+async def marcar_productividad(
+    project_id: int,
+    payload: OkrProductiveInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """admin/superadmin pueden marcar si un OKR fue productivo o no."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    project.okr_productive = payload.productive
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    await ws_manager.broadcast("project.productividad", {
+        "id": project_id, "productive": payload.productive
+    })
+    return _to_read(project)
+
+
+# ── Cambiar fecha de vencimiento del OKR ─────────────────────────────────────
+@router.patch("/{project_id}/due-date", response_model=ProjectRead)
+async def actualizar_due_date(
+    project_id: int,
+    payload: DueDateInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """admin/superadmin pueden ajustar la fecha de vencimiento del OKR."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    try:
+        from datetime import date as _date
+        parsed = datetime.combine(
+            _date.fromisoformat(payload.due_date),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD.")
+    project.due_date = parsed
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
     return _to_read(project)

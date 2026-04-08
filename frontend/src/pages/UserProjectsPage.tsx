@@ -158,13 +158,37 @@ export default function UserProjectsPage() {
                   <div className="mt-4 flex items-center justify-between">
                     <div className="space-y-1">
                       <span className="block text-xs text-slate-600">
-                        {new Date(p.created_at).toLocaleDateString("es-CO", {
+                        Creado: {new Date(p.created_at).toLocaleDateString("es-CO", {
                           year: "numeric", month: "short", day: "numeric"
                         })}
                       </span>
+                      {p.due_date && (
+                        <span className="block text-[11px] text-slate-500">
+                          Vence: <span className={cn(
+                            new Date(p.due_date) < new Date() ? "text-red-400" : "text-amber-300"
+                          )}>{new Date(p.due_date).toLocaleDateString("es-CO", {
+                            year: "numeric", month: "short", day: "numeric"
+                          })}</span>
+                        </span>
+                      )}
+                      {p.okr_creator && (
+                        <span className="block text-[11px] text-slate-500">
+                          Creó el OKR: <span className="text-slate-300">{p.okr_creator}</span>
+                        </span>
+                      )}
                       <span className="block text-[11px] text-slate-500">
                         Subió: <span className="text-slate-300">{p.submitted_by_name ?? (user?.full_name ?? user?.email ?? "Sin dato")}</span>
                       </span>
+                      {p.okr_productive !== null && p.okr_productive !== undefined && (
+                        <span className={cn(
+                          "inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border",
+                          p.okr_productive
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/20 text-red-400 border-red-500/30"
+                        )}>
+                          {p.okr_productive ? "Productivo" : "No productivo"}
+                        </span>
+                      )}
                     </div>
                     <button onClick={() => navigate(`/projects/${p.id}`)}
                       className="flex items-center gap-1.5 text-xs text-electric hover:text-electric-bright transition-colors font-medium">
