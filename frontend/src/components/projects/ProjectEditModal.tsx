@@ -1,5 +1,5 @@
 // frontend/src/components/projects/ProjectEditModal.tsx
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { X, Save, Loader2, Plus, Sparkles } from "lucide-react"
 import api from "@/lib/api"
