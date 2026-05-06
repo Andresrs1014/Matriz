@@ -23,6 +23,7 @@ from app.services.project_service import (
     marcar_evaluado, registrar_salario, iniciar_calculo_roi,
     aprobacion_final, rechazar_proyecto,
 )
+from app.services.evidence_service import count_active_evidences, evidence_counts_by_project_ids
 from app.services.comment_service import create_status_comment
 from app.services.roi_service import (
     _calcular_valor_hora, assign_roi_quadrant, completar_roi_calculo  # ← añadido
@@ -44,7 +45,7 @@ def _parse_collaborators(raw: str | None) -> list[str]:
     return [str(item).strip() for item in data if str(item).strip()]
 
 
-def _to_read(p: Project) -> ProjectRead:
+def _to_read(p: Project, evidence_count: int = 0) -> ProjectRead:
     assert p.id is not None
     return ProjectRead(
         id=p.id,
@@ -71,7 +72,13 @@ def _to_read(p: Project) -> ProjectRead:
         final_approved_at=p.final_approved_at,
         created_at=p.created_at,
         updated_at=p.updated_at,
+        evidence_count=evidence_count,
     )
+
+
+def _read_with_evidence_count(db: Session, p: Project) -> ProjectRead:
+    assert p.id is not None
+    return _to_read(p, count_active_evidences(db, p.id))
 
 
 # ── CRUD base ────────────────────────────────────────────────────────────────
@@ -92,7 +99,9 @@ def list_projects(
             .where(Project.owner_id == current_user.id)
             .order_by(col(Project.created_at).desc())
         ).all())
-    return [_to_read(p) for p in projects]
+    ids = [p.id for p in projects if p.id is not None]
+    ev_counts = evidence_counts_by_project_ids(db, ids)
+    return [_to_read(p, ev_counts.get(p.id, 0)) for p in projects]
 
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
@@ -133,7 +142,7 @@ async def create_project_endpoint(
         event_type="project.created",
         payload={"id": project.id, "title": project.title},
     )
-    return _to_read(project)
+    return _to_read(project, 0)
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -147,7 +156,7 @@ def get_project(
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
     if current_user.role not in ("admin", "superadmin", "coordinador") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 @router.patch("/{project_id}", response_model=ProjectRead)
@@ -185,7 +194,7 @@ async def edit_project(
     db.commit()
     db.refresh(project)
     await ws_manager.broadcast("project.updated", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 @router.delete("/{project_id}")
@@ -223,7 +232,7 @@ async def escalar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.escalado", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── Flujo Paso 2: Superadmin aprueba + asigna preguntas ──────────────────────
@@ -291,7 +300,7 @@ async def superaprobar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.superaprobado", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── GET preguntas asignadas al proyecto ──────────────────────────────────────
@@ -343,7 +352,7 @@ async def iniciar_eval(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.en_evaluacion", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── Flujo Paso 4: Admin marca evaluado (tras llenar matrix) ──────────────────
@@ -369,7 +378,7 @@ async def marcar_eval(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.evaluado", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── Flujo Paso 5: Superadmin provee salario ───────────────────────────────────
@@ -419,7 +428,7 @@ async def proveer_salario(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.pendiente_salario", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── NUEVO: Superadmin corrige salario mal ingresado ───────────────────────────
@@ -506,7 +515,7 @@ async def completar_roi(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.aprobado_final", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── Rechazar (cualquier paso) ────────────────────────────────────────────────
@@ -529,7 +538,7 @@ async def rechazar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.rechazado", {"id": project_id})
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── Marcar productividad del OKR ──────────────────────────────────────────────
@@ -552,7 +561,7 @@ async def marcar_productividad(
     await ws_manager.broadcast("project.productividad", {
         "id": project_id, "productive": payload.productive
     })
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)
 
 
 # ── Cambiar fecha de vencimiento del OKR ─────────────────────────────────────
@@ -581,4 +590,4 @@ async def actualizar_due_date(
     db.add(project)
     db.commit()
     db.refresh(project)
-    return _to_read(project)
+    return _read_with_evidence_count(db, project)

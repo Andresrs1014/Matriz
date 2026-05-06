@@ -1,10 +1,13 @@
 # backend/app/services/project_service.py
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
+from sqlalchemy import delete
 from sqlmodel import Session, select, col
 
 from app.models.project import Project
 from app.models.user import User
+from app.models.evidence import ProjectEvidence
+from app.services.evidence_service import delete_project_evidences
 
 
 # ── Flujo de estados ──────────────────────────────────────────────────────────
@@ -92,6 +95,10 @@ def update_project(db: Session, project: Project, data: dict) -> Project:
 
 
 def delete_project(db: Session, project: Project) -> None:
+    assert project.id is not None
+    pid = project.id
+    delete_project_evidences(pid)
+    db.exec(delete(ProjectEvidence).where(ProjectEvidence.project_id == pid))
     db.delete(project)
     db.commit()
 

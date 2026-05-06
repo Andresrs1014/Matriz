@@ -39,6 +39,7 @@ class ProjectRead(BaseModel):
     final_approved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    evidence_count: int = 0
     model_config = {"from_attributes": True}
 
 class AprobacionFinalInput(BaseModel):

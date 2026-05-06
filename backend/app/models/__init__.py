@@ -6,6 +6,7 @@ from app.models.matrix import QuestionCategory, MatrixQuestion, MatrixEvaluation
 from app.models.roi import ROIEvaluation
 from app.models.comment import ProjectComment
 from app.models.draft import ProjectDraft
+from app.models.evidence import ProjectEvidence
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "ROIEvaluation",
     "ProjectComment",
     "ProjectDraft",
+    "ProjectEvidence",
 ]

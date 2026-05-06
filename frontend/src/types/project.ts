@@ -24,6 +24,8 @@ export interface Project {
   final_approved_at: string | null
   created_at: string
   updated_at: string
+  /** Conteo de evidencias activas; ausente se trata como 0 */
+  evidence_count?: number
 }
 
 export interface ProjectCreate {

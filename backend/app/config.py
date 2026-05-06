@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     superadmin_email: str = "admin@matrix.com"
     superadmin_password: str = "Admin1234!"
 
+    # Evidencias
+    evidence_dir: str = "./data/evidence"
+    max_evidence_mb: int = 10
+    max_evidence_per_project: int = 20
+
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 

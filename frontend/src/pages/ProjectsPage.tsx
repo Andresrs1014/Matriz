@@ -7,6 +7,7 @@ import {
   Calendar, Target, DollarSign, ChevronRight,
   ArrowUpCircle, CheckCircle2, PlayCircle, BadgeCheck,
   XCircle, ThumbsUp, ThumbsDown, Pencil,
+  Paperclip,
 } from "lucide-react"
 import { useProjects } from "@/hooks/useProjects"
 import { useProjectActions } from "@/hooks/useProjectActions"
@@ -238,9 +239,25 @@ export default function ProjectsPage() {
                       className="text-white font-medium text-sm leading-snug flex-1 cursor-pointer hover:text-electric transition-colors">
                       {project.title}
                     </h3>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0", sc.class)}>
-                      {sc.label}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(project.evidence_count ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/projects/${project.id}#evidencias`)
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-600/60 bg-slate-800/80 px-2 py-0.5 text-[10px] font-medium text-slate-300 hover:border-electric/40 hover:text-electric transition-colors"
+                          title="Ver evidencias"
+                        >
+                          <Paperclip className="w-3 h-3" />
+                          {project.evidence_count}
+                        </button>
+                      )}
+                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0", sc.class)}>
+                        {sc.label}
+                      </span>
+                    </div>
                   </div>
 
                   {(project.okr_objectives ?? project.description) && (

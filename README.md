@@ -72,3 +72,7 @@ npm run dev
 ## Variables de entorno
 
 El archivo `backend/.env` **nunca se sube al repositorio**. Usa `backend/.env.example` como plantilla.
+
+### Evidencias adjuntas a proyectos
+
+Cualquier usuario autenticado puede adjuntar archivos (Excel, PDF, imágenes, Word, txt) a sus proyectos desde la creación o el detalle. Los archivos se almacenan en el volumen persistente `sqlite_data` (`/app/data/evidence`) dentro del contenedor backend, con validación de tipo, tamaño máximo 10 MB y trazabilidad completa (quién subió, cuándo, hash SHA-256). El borrado es lógico (soft delete) para conservar auditoría.

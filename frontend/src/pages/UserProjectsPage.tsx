@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, FolderKanban, XCircle, AlertCircle, ChevronRight } from "lucide-react"
+import { Plus, FolderKanban, XCircle, AlertCircle, ChevronRight, Paperclip } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
 import { cn } from "@/lib/utils"
@@ -113,12 +113,21 @@ export default function UserProjectsPage() {
                   transition={{ delay: i * 0.04 }}
                   className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-5 hover:border-slate-600/60 transition-all">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-start gap-2">
                       <h3 className="text-sm font-semibold text-white truncate">{p.title}</h3>
-                      {(p.okr_objectives ?? p.description) && (
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                          {p.okr_objectives ?? p.description}
-                        </p>
+                      {(p.evidence_count ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/projects/${p.id}#evidencias`)
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600/60 bg-slate-900/50 px-2 py-0.5 text-[10px] font-medium text-slate-300 hover:border-electric/40 hover:text-electric transition-colors"
+                          title="Ver evidencias"
+                        >
+                          <Paperclip className="w-3 h-3" />
+                          {p.evidence_count}
+                        </button>
                       )}
                     </div>
                     <span className={cn(
@@ -128,6 +137,12 @@ export default function UserProjectsPage() {
                       {sc.label}
                     </span>
                   </div>
+
+                  {(p.okr_objectives ?? p.description) && (
+                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                      {p.okr_objectives ?? p.description}
+                    </p>
+                  )}
 
                   {/* Barra de progreso */}
                   {sc.step > 0 && (

@@ -22,6 +22,8 @@ def get_engine():
 def create_db_and_tables() -> None:
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
+    # Asegurar directorio de evidencias exista
+    Path(settings.evidence_dir).mkdir(parents=True, exist_ok=True)
 
 
 def run_migrations() -> None:

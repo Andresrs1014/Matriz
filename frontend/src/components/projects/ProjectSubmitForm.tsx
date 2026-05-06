@@ -4,6 +4,9 @@ import { motion } from "framer-motion"
 import { X, Send, Loader2, Plus, UserRound, Calendar, Sparkles, Trash2, Save } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
+import { toast } from "@/store/toastStore"
+import EvidenceUploader from "./EvidenceUploader"
+import type { PendingFile } from "./EvidenceDropzone"
 
 interface Props {
   onClose: () => void
@@ -59,6 +62,7 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
 
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [draftId, setDraftId] = useState<number | null>(null)
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null)
   const [savingDraft, setSavingDraft] = useState(false)
@@ -158,7 +162,7 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
     setLoading(true)
     setError("")
     try {
-      await api.post("/projects", {
+      const { data: project } = await api.post("/projects", {
         title: title.trim(),
         description: okrObjectives.trim(),
         okr_objectives: okrObjectives.trim(),
@@ -170,6 +174,30 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
         okr_creator: okrCreator.trim() || null,
         collaborators,
       })
+
+      const validFiles = pendingFiles.filter((f) => !f.error)
+      let uploaded = 0
+      let failed = 0
+      if (validFiles.length > 0 && project?.id) {
+        for (const pf of validFiles) {
+          const form = new FormData()
+          form.append("file", pf.file)
+          try {
+            await api.post(`/projects/${project.id}/evidence`, form, {
+              headers: { "Content-Type": "multipart/form-data" },
+            })
+            uploaded++
+          } catch {
+            failed++
+          }
+        }
+        if (failed > 0) {
+          toast.warning(`${uploaded} de ${validFiles.length} evidencias se cargaron. ${failed} fallaron — puedes volver a intentarlo desde el detalle del proyecto.`)
+        } else if (uploaded > 0) {
+          toast.success(`${uploaded} evidencias adjuntadas.`)
+        }
+      }
+
       // Borrar el borrador al enviar exitosamente
       if (draftId) await api.delete("/drafts/me").catch(() => {})
       onSuccess()
@@ -314,6 +342,8 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
             <TextAreaField label="Recursos" value={resources} onChange={setResources} placeholder="Indica recursos técnicos, humanos, financieros o tecnológicos..." />
             <TextAreaField label="Los 5 Porqué" value={fiveWhys} onChange={setFiveWhys} placeholder="Explica las razones del OKR usando la lógica de los 5 porqué..." />
             <TextAreaField label="Métodos De Medición" value={measurementMethods} onChange={setMeasurementMethods} placeholder="Indica la fórmula, indicador o medio de medición que se usará..." />
+
+            <EvidenceUploader mode="pending" files={pendingFiles} onChange={setPendingFiles} />
 
             {error && (
               <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">

@@ -80,6 +80,19 @@ export function canCorregirSalario(user: User | null, status: string): boolean {
   return isSuperAdmin(user) && status === "pendiente_salario"
 }
 
+// ── Evidencias ───────────────────────────────────────────────────────────────
+
+export function canUploadEvidence(user: User | null, projectOwnerId: number, projectStatus: string): boolean {
+  if (projectStatus === "rechazado") return false
+  if (isAdmin(user) || isSuperAdmin(user) || isCoordinador(user)) return true
+  return user?.id === projectOwnerId
+}
+
+export function canDeleteEvidence(user: User | null, evidenceUploaderId: number): boolean {
+  if (isAdmin(user) || isSuperAdmin(user)) return true
+  return user?.id === evidenceUploaderId
+}
+
 /** Admin o superadmin pueden rechazar en cualquier etapa */
 export function canRechazar(user: User | null, status: string): boolean {
   return isAdmin(user) && !["aprobado_final", "rechazado"].includes(status)

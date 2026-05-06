@@ -5,7 +5,9 @@ import { toast } from "@/store/toastStore"
 import { WS_URL } from "@/lib/constants"
 import { useCommentEventStore } from "@/store/commentEventStore"
 import { useROIEventStore } from "@/store/roiEventStore"
+import { useEvidenceEventStore } from "@/store/evidenceEventStore"
 import type { Comment } from "@/types/comment"
+import type { Evidence } from "@/types/evidence"
 
 export function useWebSocket() {
   const wsRef             = useRef<WebSocket | null>(null)
@@ -14,6 +16,7 @@ export function useWebSocket() {
   const { fetchProjects } = useProjects()
   const { setLastCommentEvent } = useCommentEventStore()
   const { triggerROIRefresh } = useROIEventStore()
+  const { setLastEvent: setLastEvidenceEvent } = useEvidenceEventStore()
 
   // Guardar fetchProjects en un ref para que el useEffect no dependa de él
   // y no se re-ejecute cada vez que cambia su referencia
@@ -31,6 +34,11 @@ export function useWebSocket() {
   useEffect(() => {
     triggerROIRefreshRef.current = triggerROIRefresh
   }, [triggerROIRefresh])
+
+  const setLastEvidenceEventRef = useRef(setLastEvidenceEvent)
+  useEffect(() => {
+    setLastEvidenceEventRef.current = setLastEvidenceEvent
+  }, [setLastEvidenceEvent])
 
   useEffect(() => {
     const connect = () => {
@@ -81,6 +89,20 @@ export function useWebSocket() {
               const comment = msg.data as Comment
               if (comment?.project_id != null) {
                 setLastCommentEventRef.current(comment.project_id, comment)
+              }
+              break
+            }
+            case "project.evidence_added": {
+              const ev = msg.data as Evidence
+              if (ev?.project_id != null) {
+                setLastEvidenceEventRef.current(ev.project_id, "added", ev)
+              }
+              break
+            }
+            case "project.evidence_removed": {
+              const evData = msg.data as { id: number; project_id: number }
+              if (evData?.project_id != null) {
+                setLastEvidenceEventRef.current(evData.project_id, "removed")
               }
               break
             }

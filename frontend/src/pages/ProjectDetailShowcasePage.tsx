@@ -21,7 +21,7 @@ import {
 import api from "@/lib/api"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
 import { cn } from "@/lib/utils"
-import { canVerROI, isAdmin, isSuperAdmin, isUsuario } from "@/lib/roles"
+import { canVerROI, isAdmin, isSuperAdmin, isUsuario, canUploadEvidence, canDeleteEvidence } from "@/lib/roles"
 import { useAuthStore } from "@/store/authStore"
 import type { Project } from "@/types/project"
 import { ROI_QUADRANT_CONFIG, type ROICuadranteKey, type ROIRead } from "@/types/roi"
@@ -29,6 +29,7 @@ import ProjectChat from "@/components/chat/ProjectChat"
 import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
 import ProjectEditModal from "@/components/projects/ProjectEditModal"
+import EvidenceUploader from "@/components/projects/EvidenceUploader"
 
 interface Evaluation {
   id: number
@@ -296,6 +297,15 @@ export default function ProjectDetailShowcasePage() {
                 </div>
               </div>
             </motion.section>
+
+            {project && (
+              <EvidenceUploader
+                mode="live"
+                projectId={project.id}
+                canUpload={canUploadEvidence(user, project.owner_id, project.status)}
+                canDelete={(ev) => canDeleteEvidence(user, ev.uploaded_by)}
+              />
+            )}
 
             <section className="space-y-5">
               <div className="space-y-1">
