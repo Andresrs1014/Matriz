@@ -39,7 +39,7 @@ class SMTPConfigUpsert(BaseModel):
     host: str
     port: int = 587
     username: str
-    password: str
+    password: str = ""
     use_tls: bool = True
     from_name: str = "Matriz ZYMO"
     notification_email: str

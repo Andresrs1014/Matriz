@@ -15,7 +15,8 @@ export interface SMTPConfigUpsert {
   host: string
   port: number
   username: string
-  password: string
+  /** Vacío en actualización = no cambiar la contraseña en el servidor. */
+  password?: string
   use_tls: boolean
   from_name: string
   notification_email: string

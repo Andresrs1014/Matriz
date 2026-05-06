@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react"
-import { Settings, Users, AlertCircle, Plus, Trash2, Shield, RotateCcw, UserX } from "lucide-react"
+import { Settings, Users, AlertCircle, Plus, Trash2, Shield, RotateCcw, UserX, Plug } from "lucide-react"
 import { useSettings } from "@/hooks/useSettings"
 import CategoryManager from "@/components/settings/CategoryManager"
 import QuestionManager from "@/components/settings/QuestionManager"
+import DevTeamManager from "@/components/settings/DevTeamManager"
+import SMTPConfigForm from "@/components/settings/SMTPConfigForm"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuthStore } from "@/store/authStore"
 import { isSuperAdmin, isAdmin, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
@@ -11,7 +13,7 @@ import { cn } from "@/lib/utils"
 import api from "@/lib/api"
 import type { User } from "@/types/auth"
 
-type TabKey       = "config" | "usuarios"
+type TabKey = "config" | "usuarios" | "integraciones"
 type UserTabView  = "activos" | "archivados"
 
 export default function SettingsPage() {
@@ -22,7 +24,13 @@ export default function SettingsPage() {
   } = useSettings()
 
   const { user: me } = useAuthStore()
+  const isSA = isSuperAdmin(me)
+
   const [tab, setTab] = useState<TabKey>("config")
+
+  useEffect(() => {
+    if (tab === "integraciones" && !isSuperAdmin(me)) setTab("config")
+  }, [tab, me])
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const activeCatId = selectedCatId ?? categories.find((c) => c.is_default)?.id ?? null
 
@@ -63,6 +71,20 @@ export default function SettingsPage() {
           )}>
           <Users size={15} /> Usuarios
         </button>
+        {isSA && (
+          <button
+            type="button"
+            onClick={() => setTab("integraciones")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border",
+              tab === "integraciones"
+                ? "bg-electric/15 border-electric/30 text-electric"
+                : "text-slate-400 hover:text-white hover:bg-navy-800 border-transparent"
+            )}
+          >
+            <Plug size={15} /> Equipo y correo
+          </button>
+        )}
       </div>
 
       {/* Tab Configuración */}
@@ -107,6 +129,18 @@ export default function SettingsPage() {
             </p>
           </div>
         </>
+      )}
+
+      {/* Tab Integraciones — solo superadmin */}
+      {tab === "integraciones" && isSA && (
+        <div className="space-y-6 max-w-3xl">
+          <div className="glass-card p-5 border border-electric/15">
+            <DevTeamManager />
+          </div>
+          <div className="glass-card p-5 border border-electric/15">
+            <SMTPConfigForm />
+          </div>
+        </div>
       )}
 
       {/* Tab Usuarios */}

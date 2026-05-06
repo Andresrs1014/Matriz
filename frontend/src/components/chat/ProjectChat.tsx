@@ -8,6 +8,7 @@ import { useCommentEventStore } from "@/store/commentEventStore"
 import { toast } from "@/store/toastStore"
 import api from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Comment } from "@/types/comment"
 
 interface Props {
@@ -29,17 +30,19 @@ const ROLE_COLORS: Record<string, string> = {
   usuario:     "text-slate-300",
 }
 
-/** Staff: tipos de mensaje en el hilo + actualización que notifica al equipo. */
-const TIPOS_STAFF = [
-  { value: "comentario",    label: "Comentario" },
-  { value: "feedback",      label: "Feedback" },
-  { value: "cambio_estado", label: "Estado" },
-  { value: "actualizacion", label: "Actualización OKR" },
+/** Solo admin/superadmin: comentario o actualización (plan Fase 7 — sin feedback/estado manual). */
+const TIPOS_ADMIN_MENSAJE: { value: "comentario" | "actualizacion"; label: string; tooltip?: string }[] = [
+  { value: "comentario", label: "Comentario" },
+  {
+    value: "actualizacion",
+    label: "Actualización OKR",
+    tooltip: "Notifica por correo al equipo de desarrollo y al email de notificación configurado en Ajustes.",
+  },
 ]
 
 /** Dueño del proyecto: comentario normal o aviso al equipo (dispara email). */
-const TIPOS_USUARIO = [
-  { value: "comentario",    label: "Comentario" },
+const TIPOS_USUARIO: { value: "comentario" | "actualizacion"; label: string }[] = [
+  { value: "comentario", label: "Comentario" },
   { value: "actualizacion", label: "Actualización al equipo" },
 ]
 
@@ -47,14 +50,15 @@ export default function ProjectChat({ projectId }: Props) {
   const { user } = useAuthStore()
   const [comments, setComments] = useState<Comment[]>([])
   const [message, setMessage] = useState("")
-  const [tipo, setTipo] = useState("comentario")
+  const [tipo, setTipo] = useState<"comentario" | "actualizacion">("comentario")
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const esUsuario = user?.role === "usuario"
-  const puedeElegiTipo = isAdmin(user) || isSuperAdmin(user) || isCoordinador(user)
+  const puedeSelectorUsuario = esUsuario
+  const puedeSelectorAdmin = isAdmin(user)
 
   // Escuchar eventos de nuevos comentarios vía WebSocket
   const lastCommentEvent = useCommentEventStore((s) => s.lastCommentEvent)
@@ -106,7 +110,10 @@ export default function ProjectChat({ projectId }: Props) {
     try {
       const { data: newComment } = await api.post<Comment>(`/projects/${projectId}/comments`, {
         message: message.trim(),
-        tipo,
+        tipo:
+          esUsuario || puedeSelectorAdmin
+            ? tipo
+            : "comentario",
       })
       setMessage("")
       setComments((prev) =>
@@ -221,32 +228,63 @@ export default function ProjectChat({ projectId }: Props) {
 
       {/* Input */}
       <div className="px-4 py-3 border-t border-slate-700/50 space-y-2">
-        {(puedeElegiTipo || esUsuario) && (
-          <div className="space-y-1">
-            <div className="flex gap-1.5 flex-wrap">
-              {(esUsuario ? TIPOS_USUARIO : TIPOS_STAFF).map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setTipo(t.value)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all",
-                    tipo === t.value
-                      ? "bg-electric/20 border-electric/40 text-electric"
-                      : "border-slate-700/40 text-slate-600 hover:text-slate-300"
-                  )}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+        {(puedeSelectorUsuario || puedeSelectorAdmin) && (
+          <TooltipProvider delayDuration={200}>
+            <div className="space-y-1">
+              <div className="flex gap-1.5 flex-wrap">
+                {(puedeSelectorUsuario ? TIPOS_USUARIO : TIPOS_ADMIN_MENSAJE).map((t) => {
+                  const inner = (
+                    <button
+                      type="button"
+                      onClick={() => setTipo(t.value)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all",
+                        tipo === t.value
+                          ? "bg-electric/20 border-electric/40 text-electric"
+                          : "border-slate-700/40 text-slate-600 hover:text-slate-300"
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                  if ("tooltip" in t && puedeSelectorAdmin) {
+                    const hint = typeof t.tooltip === "string" ? t.tooltip : ""
+                    if (!hint) {
+                      return (
+                        <span key={t.value} className="inline-block">
+                          {inner}
+                        </span>
+                      )
+                    }
+                    return (
+                      <Tooltip key={t.value}>
+                        <TooltipTrigger asChild>{inner}</TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[240px] text-xs leading-snug bg-navy-900 border border-navy-600 text-slate-200">
+                          {hint}
+                        </TooltipContent>
+                      </Tooltip>
+                    )
+                  }
+                  return (
+                    <span key={t.value} className="inline-block">
+                      {inner}
+                    </span>
+                  )
+                })}
+              </div>
             {esUsuario && tipo === "actualizacion" && (
               <p className="text-[10px] text-slate-500 leading-snug">
                 El mensaje quedará en el historial y se intentará notificar por correo a quienes estén
                 en el equipo de desarrollo y al correo de notificaciones en ajustes.
               </p>
             )}
-          </div>
+            {puedeSelectorAdmin && tipo === "actualizacion" && (
+              <p className="text-[10px] text-slate-500 leading-snug">
+                Se enviará correo al equipo y al buzón de notificaciones SMTP (si está configurado).
+              </p>
+            )}
+            </div>
+          </TooltipProvider>
         )}
         <div className="flex gap-2">
           <textarea

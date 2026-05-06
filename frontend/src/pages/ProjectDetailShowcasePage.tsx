@@ -6,6 +6,7 @@ import {
   Calendar,
   CalendarClock,
   ClipboardList,
+  Loader2,
   Lock,
   MessageCircle,
   Pencil,
@@ -30,6 +31,8 @@ import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
 import ProjectEditModal from "@/components/projects/ProjectEditModal"
 import EvidenceUploader from "@/components/projects/EvidenceUploader"
+import { useProjectActions } from "@/hooks/useProjectActions"
+import { toast } from "@/store/toastStore"
 
 interface Evaluation {
   id: number
@@ -76,7 +79,9 @@ export default function ProjectDetailShowcasePage() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [evaluating, setEvaluating] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [devAssignBusy, setDevAssignBusy] = useState(false)
 
+  const assignActions = useProjectActions()
   const esUsuario = isUsuario(user)
   const canSeeROI = canVerROI(user)
   const canEvaluate = isAdmin(user) || isSuperAdmin(user)
@@ -107,6 +112,28 @@ export default function ProjectDetailShowcasePage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  const isSa = isSuperAdmin(user)
+
+  async function handleDevAssignmentToggle() {
+    if (!project?.id) return
+    setDevAssignBusy(true)
+    try {
+      const updated = project.assigned_to_dev
+        ? await assignActions.unassignFromDev(project.id)
+        : await assignActions.assignToDev(project.id)
+      if (updated) {
+        setProject(updated)
+        toast.success(
+          project.assigned_to_dev ? "Asignación a desarrollo quitada." : "Proyecto asignado al área de Desarrollo."
+        )
+      } else {
+        toast.error("No se pudo actualizar la asignación a desarrollo.")
+      }
+    } finally {
+      setDevAssignBusy(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -181,6 +208,11 @@ export default function ProjectDetailShowcasePage() {
                       <span className={cn("inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium", statusConf.class)}>
                         {statusConf.label}
                       </span>
+                      {project.assigned_to_dev && (
+                        <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold border-[#E31E24]/50 bg-[#E31E24]/15 text-[#E31E24]">
+                          Área de Desarrollo
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -196,6 +228,19 @@ export default function ProjectDetailShowcasePage() {
                   </div>
 
                   <div className="flex gap-2 flex-wrap">
+                    {isSa && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDevAssignmentToggle()}
+                        disabled={devAssignBusy || assignActions.loading}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E31E24]/45 bg-[#E31E24]/10 px-4 py-3 text-sm font-medium text-[#E31E24] transition-all hover:bg-[#E31E24]/20 disabled:opacity-50"
+                      >
+                        {devAssignBusy || assignActions.loading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : null}
+                        {project.assigned_to_dev ? "Quitar asignación" : "Asignar a Desarrollo"}
+                      </button>
+                    )}
                     {canEvaluate && (
                       <button
                         onClick={() => setEditing(true)}
