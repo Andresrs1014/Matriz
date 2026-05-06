@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlmodel import Field, Relationship, SQLModel
-
-from app.models.work_catalog import WorkArea, WorkSite
+from sqlmodel import Field, SQLModel
 
 
 class User(SQLModel, table=True):
@@ -20,6 +18,3 @@ class User(SQLModel, table=True):
 
     work_area_id: Optional[int] = Field(default=None, foreign_key="workarea.id")
     work_site_id: Optional[int] = Field(default=None, foreign_key="worksite.id")
-
-    work_area: Optional[WorkArea] = Relationship(back_populates="users")
-    work_site: Optional[WorkSite] = Relationship(back_populates="users")

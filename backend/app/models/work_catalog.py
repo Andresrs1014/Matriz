@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from sqlalchemy import UniqueConstraint
-from sqlmodel import Field, Relationship, SQLModel
-
-if TYPE_CHECKING:
-    from app.models.user import User
+from sqlmodel import Field, SQLModel
 
 
 class WorkArea(SQLModel, table=True):
@@ -18,8 +15,6 @@ class WorkArea(SQLModel, table=True):
     name: str = Field(max_length=120, nullable=False, index=True)
     sort_order: int = Field(default=0, nullable=False)
 
-    users: list["User"] = Relationship(back_populates="work_area")
-
 
 class WorkSite(SQLModel, table=True):
     """Catálogo de sedes / 'plataforma' operativa (Logimat, IMCargo, etc.)."""
@@ -29,5 +24,3 @@ class WorkSite(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(max_length=120, nullable=False, index=True)
     sort_order: int = Field(default=0, nullable=False)
-
-    users: list["User"] = Relationship(back_populates="work_site")
