@@ -37,6 +37,9 @@ class ProjectRead(BaseModel):
     approved_at: datetime | None = None
     final_approved_by: int | None = None
     final_approved_at: datetime | None = None
+    assigned_to_dev: bool = False
+    assigned_to_dev_at: datetime | None = None
+    assigned_to_dev_by: int | None = None
     created_at: datetime
     updated_at: datetime
     evidence_count: int = 0

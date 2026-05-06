@@ -1,9 +1,18 @@
 from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel
+
 
 class CommentCreate(BaseModel):
     message: str
-    tipo:    str = "comentario"   # comentario | feedback | aprobacion
+    tipo: Literal[
+        "comentario",
+        "cambio_estado",
+        "feedback",
+        "aprobacion",
+        "actualizacion",
+    ] = "comentario"
 
 class CommentRead(BaseModel):
     id:          int
