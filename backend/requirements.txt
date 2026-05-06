@@ -6,3 +6,4 @@ pydantic[email]
 python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
+aiosmtplib==3.0.1

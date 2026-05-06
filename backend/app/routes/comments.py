@@ -5,7 +5,11 @@ from app.core.ws_manager import ws_manager
 from app.models.user import User
 from app.models.project import Project
 from app.schemas.comment import CommentCreate, CommentRead
-from app.services.comment_service import create_comment, get_comments, delete_comment
+from app.services.comment_service import (
+    create_comment_with_email,
+    delete_comment,
+    get_comments,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/comments", tags=["Comments"])
 
@@ -45,7 +49,7 @@ async def add_comment(
 ):
     project = _get_project_or_404(project_id, db)
     _check_access(project, current_user)
-    comment = create_comment(db, project_id, current_user, payload)
+    comment = await create_comment_with_email(db, project_id, current_user, payload)
     await ws_manager.broadcast("comment.created", {
         "id":          comment.id,
         "project_id":  comment.project_id,

@@ -1,8 +1,14 @@
-from sqlmodel import Session, select, col
+import asyncio
+
 from fastapi import HTTPException, status
+from sqlmodel import Session, select, col
+
 from app.models.comment import ProjectComment
+from app.models.project import Project
 from app.models.user import User
 from app.schemas.comment import CommentCreate
+from app.services.email_service import send_actualizacion_notification_detached
+
 
 def create_comment(
     db: Session,
@@ -22,6 +28,32 @@ def create_comment(
     db.add(comment)
     db.commit()
     db.refresh(comment)
+    return comment
+
+
+async def create_comment_with_email(
+    db: Session,
+    project_id: int,
+    author: User,
+    payload: CommentCreate,
+) -> ProjectComment:
+    """Crea comentario y, si tipo == actualización, programa email (sesión nueva en segundo plano)."""
+    comment = create_comment(db, project_id, author, payload)
+    if payload.tipo != "actualizacion":
+        return comment
+    project = db.get(Project, project_id)
+    if not project:
+        return comment
+    project_title = project.title
+    author_name = author.full_name or author.email
+    asyncio.create_task(
+        send_actualizacion_notification_detached(
+            project_title=project_title,
+            project_id=project_id,
+            author_name=author_name,
+            message=payload.message,
+        )
+    )
     return comment
 
 
