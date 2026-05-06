@@ -183,9 +183,7 @@ export default function ProjectSubmitForm({ onClose, onSuccess }: Props) {
           const form = new FormData()
           form.append("file", pf.file)
           try {
-            await api.post(`/projects/${project.id}/evidence`, form, {
-              headers: { "Content-Type": "multipart/form-data" },
-            })
+            await api.post(`/projects/${project.id}/evidence`, form)
             uploaded++
           } catch {
             failed++

@@ -36,7 +36,6 @@ export function useEvidence() {
         form.append("file", file)
         if (description) form.append("description", description)
         const { data } = await api.post(`/projects/${projectId}/evidence`, form, {
-          headers: { "Content-Type": "multipart/form-data" },
           onUploadProgress: (e) => {
             if (e.total && onProgress) {
               onProgress(Math.round((e.loaded / e.total) * 100))
@@ -79,7 +78,7 @@ export function useEvidence() {
       const { data } = await api.get(`/projects/${projectId}/evidence/${evidenceId}/download`, {
         responseType: "blob",
       })
-      const blobUrl = URL.createObjectURL(data)
+      const blobUrl = URL.createObjectURL(data as Blob)
       const a = document.createElement("a")
       a.href = blobUrl
       a.download = filename || "evidencia"
