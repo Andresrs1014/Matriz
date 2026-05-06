@@ -5,6 +5,8 @@ import CategoryManager from "@/components/settings/CategoryManager"
 import QuestionManager from "@/components/settings/QuestionManager"
 import DevTeamManager from "@/components/settings/DevTeamManager"
 import SMTPConfigForm from "@/components/settings/SMTPConfigForm"
+import OrgCatalogManager from "@/components/settings/OrgCatalogManager"
+import { UserEditButton } from "@/components/settings/UserEditDialog"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuthStore } from "@/store/authStore"
 import { isSuperAdmin, isAdmin, ROLE_LABELS, ROLE_COLORS } from "@/lib/roles"
@@ -12,6 +14,8 @@ import type { Role } from "@/lib/roles"
 import { cn } from "@/lib/utils"
 import api from "@/lib/api"
 import type { User } from "@/types/auth"
+
+import type { CatalogRow } from "@/types/catalog"
 
 type TabKey = "config" | "usuarios" | "integraciones"
 type UserTabView  = "activos" | "archivados"
@@ -29,7 +33,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabKey>("config")
 
   useEffect(() => {
-    if (tab === "integraciones" && !isSuperAdmin(me)) setTab("config")
+    if (tab === "integraciones" && !isAdmin(me)) setTab("config")
   }, [tab, me])
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const activeCatId = selectedCatId ?? categories.find((c) => c.is_default)?.id ?? null
@@ -71,7 +75,7 @@ export default function SettingsPage() {
           )}>
           <Users size={15} /> Usuarios
         </button>
-        {isSA && (
+        {isAdmin(me) && (
           <button
             type="button"
             onClick={() => setTab("integraciones")}
@@ -82,7 +86,7 @@ export default function SettingsPage() {
                 : "text-slate-400 hover:text-white hover:bg-navy-800 border-transparent"
             )}
           >
-            <Plug size={15} /> Equipo y correo
+            <Plug size={15} /> Integraciones
           </button>
         )}
       </div>
@@ -131,14 +135,33 @@ export default function SettingsPage() {
         </>
       )}
 
-      {/* Tab Integraciones — solo superadmin */}
-      {tab === "integraciones" && isSA && (
-        <div className="space-y-6 max-w-3xl">
-          <div className="glass-card p-5 border border-electric/15">
-            <DevTeamManager />
+      {/* Tab Integraciones — catálogo: admin+; equipo/correo: solo superadmin */}
+      {tab === "integraciones" && isAdmin(me) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start max-w-[1400px]">
+          <div className="glass-card p-5 border border-electric/10">
+            <p className="text-sm font-semibold text-white mb-1">Áreas y sedes</p>
+            <p className="text-xs text-slate-500 mb-4">
+              Listas para asignar a usuarios. Solo admin o superadmin las editan.
+            </p>
+            <OrgCatalogManager />
           </div>
-          <div className="glass-card p-5 border border-electric/15">
-            <SMTPConfigForm />
+          <div className="space-y-6">
+            {isSA ? (
+              <>
+                <div className="glass-card p-5 border border-electric/15">
+                  <DevTeamManager />
+                </div>
+                <div className="glass-card p-5 border border-electric/15">
+                  <SMTPConfigForm />
+                </div>
+              </>
+            ) : (
+              <div className="glass-card p-5 border border-navy-700">
+                <p className="text-sm text-slate-400">
+                  El equipo de desarrollo y la configuración SMTP solo las puede gestionar un <strong className="text-slate-200">superadmin</strong>.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -153,21 +176,53 @@ export default function SettingsPage() {
 
 // ── Panel de gestión de usuarios ─────────────────────────────────────────────
 function UsersTab({ currentUser }: { currentUser: User | null }) {
-  const [view,       setView]       = useState<UserTabView>("activos")
-  const [users,      setUsers]      = useState<User[]>([])
-  const [archived,   setArchived]   = useState<User[]>([])
-  const [loading,    setLoading]    = useState(true)
+  const [view, setView] = useState<UserTabView>("activos")
+  const [users, setUsers] = useState<User[]>([])
+  const [archived, setArchived] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [form,       setForm]       = useState({ email: "", full_name: "", password: "", role: "usuario", area: "" })
-  const [creating,   setCreating]   = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
-  const [confirm,    setConfirm]    = useState<number | null>(null)  // id del user a eliminar permanente
+  const [form, setForm] = useState({
+    email: "",
+    full_name: "",
+    password: "",
+    role: "usuario",
+    work_area_id: "" as "" | number,
+    work_site_id: "" as "" | number,
+  })
+  const [catalogAreas, setCatalogAreas] = useState<CatalogRow[]>([])
+  const [catalogSites, setCatalogSites] = useState<CatalogRow[]>([])
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<number | null>(null)
 
-  const isSA    = isSuperAdmin(currentUser)
-  const isAdm   = isAdmin(currentUser)
+  const isSA = isSuperAdmin(currentUser)
+  const isAdm = isAdmin(currentUser)
   const ROLES: Role[] = ["usuario", "coordinador", "admin", "superadmin"]
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    void fetchAll()
+  }, [])
+
+  useEffect(() => {
+    let ok = true
+    ;(async () => {
+      try {
+        const [a, s] = await Promise.all([
+          api.get<CatalogRow[]>("/catalog/areas"),
+          api.get<CatalogRow[]>("/catalog/sites"),
+        ])
+        if (ok) {
+          setCatalogAreas(a.data)
+          setCatalogSites(s.data)
+        }
+      } catch {
+        /* catálogo vacío o sin permiso: los selects quedarán vacíos */
+      }
+    })()
+    return () => {
+      ok = false
+    }
+  }, [])
 
   async function fetchAll() {
     setLoading(true)
@@ -198,12 +253,19 @@ function UsersTab({ currentUser }: { currentUser: User | null }) {
         email: form.email,
         full_name: form.full_name,
         password: form.password,
-        area: form.area || undefined,
+        work_area_id: form.work_area_id === "" ? undefined : form.work_area_id,
+        work_site_id: form.work_site_id === "" ? undefined : form.work_site_id,
         role: form.role,
       })
-      // Éxito: cerrar formulario antes de recargar
       setShowCreate(false)
-      setForm({ email: "", full_name: "", password: "", role: "usuario", area: "" })
+      setForm({
+        email: "",
+        full_name: "",
+        password: "",
+        role: "usuario",
+        work_area_id: "",
+        work_site_id: "",
+      })
       // Recargar lista — error aquí no afecta el éxito de la creación
       try { await fetchAll() } catch { setError("Usuario creado. No se pudo recargar la lista, recarga la página.") }
     } catch (e: any) {
@@ -295,9 +357,49 @@ function UsersTab({ currentUser }: { currentUser: User | null }) {
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 className="px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric" />
               <p className="text-[11px] text-slate-500 -mt-1 sm:col-span-2">Mínimo 5 caracteres</p>
-              <input placeholder="Área (opcional)" value={form.area}
-                onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
-                className="px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-electric" />
+              <p className="text-[11px] text-slate-500 sm:col-span-2">
+                Área y sede son opcionales; créalas en Integraciones si aún no existen en el catálogo.
+              </p>
+              <label className="text-xs text-slate-400 sm:col-span-1">
+                Área
+                <select
+                  value={form.work_area_id === "" ? "" : String(form.work_area_id)}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      work_area_id: e.target.value === "" ? "" : Number(e.target.value),
+                    }))
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm focus:outline-none focus:border-electric"
+                >
+                  <option value="">— Opcional —</option>
+                  {catalogAreas.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-400 sm:col-span-1">
+                Sede (plataforma)
+                <select
+                  value={form.work_site_id === "" ? "" : String(form.work_site_id)}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      work_site_id: e.target.value === "" ? "" : Number(e.target.value),
+                    }))
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm focus:outline-none focus:border-electric"
+                >
+                  <option value="">— Opcional —</option>
+                  {catalogSites.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                 className="px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm focus:outline-none focus:border-electric">
                 {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
@@ -340,32 +442,42 @@ function UsersTab({ currentUser }: { currentUser: User | null }) {
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-medium truncate">{u.full_name ?? "Sin nombre"}</p>
                       <p className="text-slate-500 text-xs truncate">{u.email}</p>
+                      {(u.area || u.site_name) && (
+                        <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                          {[u.area, u.site_name].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
                     </div>
                     <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0", ROLE_COLORS[role])}>
                       {ROLE_LABELS[role]}
                     </span>
-                    {!isMe && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {isSA && (
-                          <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
-                            className="px-2 py-1 rounded bg-navy-700 border border-navy-600 text-white text-xs focus:outline-none focus:border-electric">
-                            {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                          </select>
-                        )}
-                        {(isSA || isAdm) && (
-                          <button onClick={() => handleDeactivate(u.id)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all"
-                            title="Archivar usuario">
-                            <UserX size={14} />
-                          </button>
-                        )}
-                        {!isSA && !isAdm && (
-                          <span title="Sin permisos para modificar">
-                            <Shield size={13} className="text-slate-600" />
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {isSA && (
+                        <UserEditButton user={u} onSaved={() => void fetchAll()} />
+                      )}
+                      {!isMe && (
+                        <>
+                          {isSA && (
+                            <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
+                              className="px-2 py-1 rounded bg-navy-700 border border-navy-600 text-white text-xs focus:outline-none focus:border-electric">
+                              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                            </select>
+                          )}
+                          {(isSA || isAdm) && (
+                            <button onClick={() => handleDeactivate(u.id)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all"
+                              title="Archivar usuario">
+                              <UserX size={14} />
+                            </button>
+                          )}
+                          {!isSA && !isAdm && (
+                            <span title="Sin permisos para modificar">
+                              <Shield size={13} className="text-slate-600" />
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 )
               })}

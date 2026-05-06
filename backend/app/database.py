@@ -99,6 +99,19 @@ def run_migrations() -> None:
          "ALTER TABLE project ADD COLUMN assigned_to_dev_at DATETIME"),
         ("project.assigned_to_dev_by",
          "ALTER TABLE project ADD COLUMN assigned_to_dev_by INTEGER"),
+
+        # Catálogos área / sede (plataforma) y FKs en usuario
+        ("user.work_area_id", "ALTER TABLE user ADD COLUMN work_area_id INTEGER"),
+        ("user.work_site_id", "ALTER TABLE user ADD COLUMN work_site_id INTEGER"),
+
+        # Igualar texto legacy user.area a fila de catálogo (nombre, case-insensitive)
+        ("user.area_to_work_area_id",
+         """UPDATE user SET work_area_id = (
+              SELECT wa.id FROM workarea wa
+              WHERE lower(trim(wa.name)) = lower(trim(user.area))
+            )
+            WHERE user.work_area_id IS NULL
+              AND user.area IS NOT NULL AND trim(user.area) != ''"""),
     ]
 
     with engine.connect() as conn:

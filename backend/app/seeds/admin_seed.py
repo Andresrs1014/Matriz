@@ -19,7 +19,6 @@ def seed_superadmin(db: Session) -> None:
             full_name="Super Administrador",
             hashed_password=hash_password(settings.superadmin_password),
             role="superadmin",
-            area="TI",
             is_active=True,
         )
         db.add(superadmin)

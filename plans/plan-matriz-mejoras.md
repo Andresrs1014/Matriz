@@ -926,7 +926,7 @@ Agregar selector de tipo de mensaje (solo para admin/superadmin — usuarios sie
 - [ ] Las tablas `devteammember` y `smtpconfig` existen en la BD tras el arranque
 - [ ] Las columnas `assigned_to_dev`, `assigned_to_dev_at`, `assigned_to_dev_by` existen en tabla `project`
 - [ ] `GET /settings/smtp` retorna 404 si no hay config (correcto) o 200 con datos
-- [ ] `POST /settings/smtp/test` retorna 502 si el SMTP no está configurado
+- [ ] `POST /settings/smtp/test` retorna **404** si no hay SMTP guardado, o **502** si existe config pero falla el envío
 - [ ] `POST /projects/{id}/assign-to-dev` solo lo puede llamar superadmin (401/403 para otros roles)
 - [ ] Al postear un comentario con `tipo: "actualizacion"`, no se bloquea la respuesta HTTP aunque el SMTP falle
 

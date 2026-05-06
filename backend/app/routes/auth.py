@@ -1,36 +1,67 @@
+from typing import cast
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from typing import cast
-from sqlmodel import Session
 from jose.exceptions import JWTError
-from app.core.dependencies import get_db, get_current_user, require_coordinador, require_admin, require_superadmin
-from app.core.security import create_access_token, decode_token
+from pydantic import BaseModel
+from sqlmodel import Session
+
+from app.core.dependencies import get_db, get_current_user, require_coordinador, require_superadmin
+from app.core.security import create_access_token, decode_token, hash_password
+from app.models.user import User
 from app.schemas.auth import (
-    RegisterRequest, TokenResponse, MeResponse,
-    UserListResponse, UpdateRoleRequest, UpdateUserRequest
+    MeResponse,
+    RegisterRequest,
+    SuperadminUpdateUserRequest,
+    TokenResponse,
+    UpdateRoleRequest,
+    UserListResponse,
 )
 from app.services.auth_service import (
-    create_user, authenticate_user, get_all_users, get_archived_users,
-    get_user_by_id, update_user_role, update_user,
-    deactivate_user, reactivate_user, permanent_delete_user,
+    authenticate_user,
+    create_user,
+    deactivate_user,
+    get_all_users,
+    get_archived_users,
     get_user_by_email,
+    get_user_by_id,
+    permanent_delete_user,
+    reactivate_user,
+    token_area_claim,
+    update_user_role,
+    update_user_superadmin,
+    user_area_and_site_labels,
 )
-from app.models.user import User
+from app.services.work_catalog_service import resolve_work_area_id_by_name
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-def _to_me(u: User) -> MeResponse:
+def _to_me(db: Session, u: User) -> MeResponse:
+    an, sn = user_area_and_site_labels(db, u)
     return MeResponse(
-        id=cast(int, u.id), email=u.email, full_name=u.full_name,
-        role=u.role, area=u.area, is_active=u.is_active,
+        id=cast(int, u.id),
+        email=u.email,
+        full_name=u.full_name,
+        role=u.role,
+        area=an,
+        site_name=sn,
+        is_active=u.is_active,
     )
 
-def _to_list(u: User) -> UserListResponse:
+
+def _to_list(db: Session, u: User) -> UserListResponse:
+    an, sn = user_area_and_site_labels(db, u)
     return UserListResponse(
-        id=cast(int, u.id), email=u.email, full_name=u.full_name,
-        role=u.role, area=u.area, is_active=u.is_active,
+        id=cast(int, u.id),
+        email=u.email,
+        full_name=u.full_name,
+        role=u.role,
+        area=an,
+        site_name=sn,
+        work_area_id=u.work_area_id,
+        work_site_id=u.work_site_id,
+        is_active=u.is_active,
         created_at=u.created_at.isoformat(),
     )
 
@@ -45,20 +76,23 @@ def register(
     if payload.role not in VALID_ROLES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Rol inválido. Valores permitidos: {', '.join(VALID_ROLES)}"
+            detail=f"Rol inválido. Valores permitidos: {', '.join(VALID_ROLES)}",
         )
     user = create_user(
-        db, email=str(payload.email),
+        db,
+        email=str(payload.email),
         password=payload.password,
         full_name=payload.full_name,
-        area=payload.area,
+        work_area_id=payload.work_area_id,
+        work_site_id=payload.work_site_id,
         role=payload.role,
     )
-    return _to_me(user)
+    return _to_me(db, user)
 
 
 class SSORequest(BaseModel):
     token: str
+
 
 class SSOResponse(BaseModel):
     access_token: str
@@ -83,17 +117,16 @@ def sso_login(payload: SSORequest, db: Session = Depends(get_db)):
 
     user = get_user_by_email(db, email)
     if not user:
-        # Auto-crear con rol mínimo; el admin de Matriz puede elevar después
+        wid = resolve_work_area_id_by_name(db, claims.get("area"))
         user = create_user(
             db,
             email=email,
-            password="__sso__",          # contraseña inutilizable (hash vacío no verifica)
+            password="__sso__",
             full_name=claims.get("full_name"),
-            area=claims.get("area"),
+            work_area_id=wid,
+            work_site_id=None,
             role="usuario",
         )
-        # Reemplazar hashed_password con un marcador que nunca verifica
-        from app.core.security import hash_password
         user.hashed_password = hash_password("__sso_disabled__")
         db.add(user)
         db.commit()
@@ -104,40 +137,34 @@ def sso_login(payload: SSORequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(
         subject=user.email,
-        extra={"role": user.role, "area": user.area},
+        extra={"role": user.role, "area": token_area_claim(db, user)},
     )
     return SSOResponse(
         access_token=access_token,
-        user=MeResponse(
-            id=cast(int, user.id),
-            email=user.email,
-            full_name=user.full_name,
-            role=user.role,
-            area=user.area,
-            is_active=user.is_active,
-        ),
+        user=_to_me(db, user),
     )
 
 
 @router.post("/token", response_model=TokenResponse)
 def token(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     user = authenticate_user(db, email=form_data.username, password=form_data.password)
     access_token = create_access_token(
         subject=user.email,
-        extra={"role": user.role, "area": user.area}
+        extra={"role": user.role, "area": token_area_claim(db, user)},
     )
     return TokenResponse(access_token=access_token)
 
 
 @router.get("/me", response_model=MeResponse)
-def me(current_user: User = Depends(get_current_user)):
-    return _to_me(current_user)
+def me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return _to_me(db, current_user)
 
-
-# ── Usuarios activos ──────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=list[UserListResponse])
 def list_users(
@@ -145,7 +172,7 @@ def list_users(
     _: User = Depends(require_coordinador),
 ):
     """Lista usuarios activos. Coordinador+."""
-    return [_to_list(u) for u in get_all_users(db)]
+    return [_to_list(db, u) for u in get_all_users(db)]
 
 
 @router.put("/users/{user_id}/role", response_model=MeResponse)
@@ -161,21 +188,21 @@ def change_user_role(
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol.")
-    return _to_me(update_user_role(db, user, payload.role))
+    return _to_me(db, update_user_role(db, user, payload.role))
 
 
 @router.put("/users/{user_id}", response_model=MeResponse)
 def update_user_data(
     user_id: int,
-    payload: UpdateUserRequest,
+    payload: SuperadminUpdateUserRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_coordinador),
+    current_user: User = Depends(require_superadmin),
 ):
-    """Actualiza datos. Coordinador+."""
+    """Nombre, correo, área, sede, contraseña (con confirmación de superadmin). Solo superadmin."""
     user = get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
-    return _to_me(update_user(db, user, payload.model_dump(exclude_unset=True)))
+    return _to_me(db, update_user_superadmin(db, user, current_user, payload))
 
 
 @router.delete("/users/{user_id}")
@@ -194,15 +221,13 @@ def deactivate_user_endpoint(
     return {"ok": True}
 
 
-# ── Usuarios archivados ───────────────────────────────────────────────────────
-
 @router.get("/users/archived", response_model=list[UserListResponse])
 def list_archived(
     db: Session = Depends(get_db),
     _: User = Depends(require_coordinador),
 ):
     """Lista usuarios archivados (últimos 6 meses). Coordinador+."""
-    return [_to_list(u) for u in get_archived_users(db)]
+    return [_to_list(db, u) for u in get_archived_users(db)]
 
 
 @router.post("/users/{user_id}/reactivar", response_model=MeResponse)
@@ -217,7 +242,7 @@ def reactivar_usuario(
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     if user.is_active:
         raise HTTPException(status_code=400, detail="El usuario ya está activo.")
-    return _to_me(reactivate_user(db, user))
+    return _to_me(db, reactivate_user(db, user))
 
 
 @router.delete("/users/{user_id}/permanent")
