@@ -63,5 +63,12 @@ export interface DashboardStats {
   evaluated_projects: number
   pending_evaluation: number
   total_evaluations: number
-  by_quadrant: Record<QuadrantKey, number>
+  by_quadrant?: Record<QuadrantKey, number>
+  // Productividad OKR
+  total_finalized: number
+  productive_count: number
+  not_productive_count: number
+  pending_productivity: number
+  expired_okrs: number
+  upcoming_okrs: number
 }

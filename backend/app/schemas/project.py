@@ -11,6 +11,7 @@ class ProjectCreate(BaseModel):
     resources: str | None = None
     five_whys: str | None = None
     measurement_methods: str | None = None
+    okr_creator: str | None = None
     collaborators: list[str] = Field(default_factory=list)
 
 class ProjectRead(BaseModel):
@@ -24,7 +25,10 @@ class ProjectRead(BaseModel):
     five_whys: str | None
     measurement_methods: str | None
     submitted_by_name: str | None = None
+    okr_creator: str | None = None
     collaborators: list[str] = Field(default_factory=list)
+    due_date: datetime | None = None
+    okr_productive: bool | None = None
     status: str
     source: str
     owner_id: int
@@ -62,6 +66,23 @@ class DatosOperacionalesInput(BaseModel):
     horas_proceso_actual: float
     horas_proceso_nuevo: float
     observacion: str | None = None
+
+class OkrProductiveInput(BaseModel):
+    productive: bool
+
+class DueDateInput(BaseModel):
+    due_date: str  # YYYY-MM-DD
+
+class ProjectEditInput(BaseModel):
+    title: str | None = None
+    okr_objectives: str | None = None
+    key_results: str | None = None
+    key_actions: str | None = None
+    resources: str | None = None
+    five_whys: str | None = None
+    measurement_methods: str | None = None
+    okr_creator: str | None = None
+    collaborators: list[str] | None = None
 
 class ProjectQuestionRead(BaseModel):
     id: int

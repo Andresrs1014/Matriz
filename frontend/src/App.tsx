@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore"
 import { canAccessSettings, isUsuario, type Role } from "@/lib/roles"
 import AppLayout from "@/components/layout/AppLayout"
 import api from "@/lib/api"
+import { useSSOToken } from "@/hooks/useSSOToken"
 
 const LoginPage          = React.lazy(() => import("@/pages/LoginPage"))
 const DashboardPage      = React.lazy(() => import("@/pages/DashboardPage"))
@@ -75,7 +76,7 @@ function RequireRole({ children, roles }: { children: React.ReactNode; roles: Ro
 export default function App() {
   const user = useAuthStore((s) => s.user)
   const userIsUsuario = isUsuario(user)
-
+  useSSOToken()
   return (
     <SSOHandler>
     <Suspense fallback={<Spinner />}>
