@@ -3,12 +3,17 @@ import { useProjectStore } from "@/store/projectStore"
 import { useProjects } from "@/hooks/useProjects"
 import { toast } from "@/store/toastStore"
 import { WS_URL } from "@/lib/constants"
+import { useCommentEventStore } from "@/store/commentEventStore"
+import { useROIEventStore } from "@/store/roiEventStore"
+import type { Comment } from "@/types/comment"
 
 export function useWebSocket() {
   const wsRef             = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { setWsConnected } = useProjectStore()
   const { fetchProjects } = useProjects()
+  const { setLastCommentEvent } = useCommentEventStore()
+  const { triggerROIRefresh } = useROIEventStore()
 
   // Guardar fetchProjects en un ref para que el useEffect no dependa de él
   // y no se re-ejecute cada vez que cambia su referencia
@@ -16,6 +21,16 @@ export function useWebSocket() {
   useEffect(() => {
     fetchProjectsRef.current = fetchProjects
   }, [fetchProjects])
+
+  const setLastCommentEventRef = useRef(setLastCommentEvent)
+  useEffect(() => {
+    setLastCommentEventRef.current = setLastCommentEvent
+  }, [setLastCommentEvent])
+
+  const triggerROIRefreshRef = useRef(triggerROIRefresh)
+  useEffect(() => {
+    triggerROIRefreshRef.current = triggerROIRefresh
+  }, [triggerROIRefresh])
 
   useEffect(() => {
     const connect = () => {
@@ -55,6 +70,20 @@ export function useWebSocket() {
               toast.info(`Proyecto sincronizado desde Microsoft Lists: "${msg.data?.title ?? ""}"`)
               break
 
+            case "roi_evaluated":
+              toast.success(`ROI calculado: "${msg.data?.project_title ?? ""}" → ${msg.data?.cuadrante_roi ?? ""}`)
+              triggerROIRefreshRef.current()
+              break
+            case "project.aprobado_final":
+              triggerROIRefreshRef.current()
+              break
+            case "comment.created": {
+              const comment = msg.data as Comment
+              if (comment?.project_id != null) {
+                setLastCommentEventRef.current(comment.project_id, comment)
+              }
+              break
+            }
             default:
               break
           }

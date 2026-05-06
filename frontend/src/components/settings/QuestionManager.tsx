@@ -19,7 +19,6 @@ const AXIS_CONFIG = {
 
 export default function QuestionManager({ categoryId, questions, onCreate, onUpdate, onDelete }: Props) {
   const [showForm, setShowForm] = useState(false)
-  const [editId,   setEditId]   = useState<number | null>(null)
   const [text,     setText]     = useState("")
   const [axis,     setAxis]     = useState<"impact" | "effort">("impact")
   const [weight,   setWeight]   = useState(1.0)

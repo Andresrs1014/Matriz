@@ -1,23 +1,24 @@
-import { useState } from "react"
-import { useNavigate, Link, useLocation } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Zap, Eye, EyeOff, LogIn, CheckCircle } from "lucide-react"
+import { Zap, Eye, EyeOff, LogIn } from "lucide-react"
 import api from "@/lib/api"
 import { useAuthStore } from "@/store/authStore"
-import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const navigate   = useNavigate()
-  const location   = useLocation()
   const { setAuth } = useAuthStore()
-
-  const successMsg = (location.state as any)?.message ?? null
 
   const [email,    setEmail]    = useState("")
   const [password, setPassword] = useState("")
   const [showPass, setShowPass] = useState(false)
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState<string | null>(null)
+  const [version,  setVersion]  = useState<string | null>(null)
+
+  useEffect(() => {
+    api.get("/health").then(({ data }) => setVersion(data.version)).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -44,8 +45,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-navy-950 flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
 
+      {/* Fondo — imagen ZYMO */}
+      <div className="absolute inset-0">
+        <img
+          src="/zymo.png"
+          alt=""
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay oscuro para legibilidad */}
+        <div className="absolute inset-0 bg-navy-950/70 backdrop-blur-sm" />
+      </div>
+
+      {/* Líneas decorativas */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="laser-line-h absolute top-1/3 left-0 right-0 opacity-20" />
         <div className="laser-line-h absolute top-2/3 left-0 right-0 opacity-10" />
@@ -59,28 +72,20 @@ export default function LoginPage() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-md relative z-10"
       >
-        <div className="glass-card p-8">
+        {/* Formulario */}
+        <div className="glass-card w-full p-8 rounded-2xl">
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 rounded-2xl bg-electric/20 border border-electric/40 flex items-center justify-center shadow-glow-blue mb-4">
               <Zap size={28} className="text-electric" />
             </div>
-            <h1 className="text-2xl font-bold text-white glow-text">Project Matrix</h1>
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-2xl font-bold text-white glow-text">Project Matrix</h1>
+              {version && <span className="text-xs text-slate-500">v{version}</span>}
+            </div>
             <p className="text-sm text-slate-400 mt-1">Inicia sesión para continuar</p>
           </div>
 
           <div className="laser-line-h mb-8 opacity-50" />
-
-          {/* Mensaje de éxito desde registro */}
-          {successMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm mb-5"
-            >
-              <CheckCircle size={15} />
-              {successMsg}
-            </motion.div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
@@ -142,20 +147,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="laser-line-h mt-6 mb-4 opacity-30" />
-
-          <p className="text-center text-sm text-slate-500">
-            ¿No tienes cuenta?{" "}
-            <Link to="/register" className="text-electric hover:text-electric-bright transition-colors font-medium">
-              Regístrate
-            </Link>
-          </p>
         </div>
 
-        <p className="text-center text-xs text-slate-600 mt-6">
-          Project Matrix Beta — Gestión inteligente de proyectos
-        </p>
       </motion.div>
+
+      <p className="absolute bottom-4 text-center text-xs text-white/30 w-full z-10">
+        Project Matrix Beta — Gestión inteligente de proyectos
+      </p>
     </div>
   )
 }

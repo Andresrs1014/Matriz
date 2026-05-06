@@ -29,6 +29,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("auth-storage")
+      alert("Tu sesión ha expirado. Por favor inicia sesión nuevamente.")
       window.location.href = "/login"
     }
     return Promise.reject(error)

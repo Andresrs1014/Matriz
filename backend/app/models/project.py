@@ -1,21 +1,44 @@
+# backend/app/models/project.py
 from datetime import datetime, timezone
-from typing import Optional
-
+from typing import ClassVar, Optional
 from sqlmodel import SQLModel, Field
 
 
 class Project(SQLModel, table=True):
+    __tablename__: ClassVar[str] = "project"
+
     id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(nullable=False)
+    description: Optional[str] = Field(default=None, nullable=True)
+    okr_objectives: Optional[str] = Field(default=None, nullable=True)
+    key_results: Optional[str] = Field(default=None, nullable=True)
+    key_actions: Optional[str] = Field(default=None, nullable=True)
+    resources: Optional[str] = Field(default=None, nullable=True)
+    five_whys: Optional[str] = Field(default=None, nullable=True)
+    measurement_methods: Optional[str] = Field(default=None, nullable=True)
+    submitted_by_name: Optional[str] = Field(default=None, nullable=True)
+    okr_creator: Optional[str] = Field(default=None, nullable=True)
+    collaborators_json: Optional[str] = Field(default=None, nullable=True)
+    due_date: Optional[datetime] = Field(default=None, nullable=True)
+    okr_productive: Optional[bool] = Field(default=None, nullable=True)
+    status: str = Field(default="pendiente_revision", nullable=False)
+    source: str = Field(default="manual", nullable=False)
+    owner_id: int = Field(index=True, foreign_key="user.id", nullable=False)
+    ms_list_id: Optional[str] = Field(default=None, nullable=True)
 
-    title: str = Field(nullable=False, max_length=200)
-    description: str | None = Field(default=None, max_length=2000)
+    # Aprobación del superadmin
+    approved_by: Optional[int] = Field(default=None, nullable=True)
+    approved_at: Optional[datetime] = Field(default=None, nullable=True)
 
-    status: str = Field(default="nuevo", nullable=False, max_length=50)
+    # Cierre final
+    final_approved_by: Optional[int] = Field(default=None, nullable=True)
+    final_approved_at: Optional[datetime] = Field(default=None, nullable=True)
 
-    owner_id: int = Field(index=True, nullable=False, foreign_key="user.id")
-
-    source: str = Field(default="manual", nullable=False, max_length=50)  # manual | list
-    ms_list_id: str | None = Field(default=None, index=True, max_length=100)
-
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

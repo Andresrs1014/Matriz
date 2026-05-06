@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import {
   FolderKanban, CheckCircle, Clock, BarChart2,
-  Target, TrendingUp, Zap, AlertCircle
+  Target, AlertCircle, ThumbsUp, ThumbsDown, CalendarClock,
 } from "lucide-react"
 import { useDashboard } from "@/hooks/useDashboard"
 import KPICard           from "@/components/dashboard/KPICard"
@@ -25,7 +25,7 @@ export default function DashboardPage() {
     : 0
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="p-6 mx-auto w-full max-w-[1610px] space-y-6 animate-fade-in">
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -110,6 +110,83 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* Sección de Productividad OKR */}
+      {stats.total_finalized > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="glass-card p-5 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <Target size={16} className="text-electric" />
+            <p className="text-sm font-medium text-white">Criterio de Productividad de OKRs</p>
+            <span className="ml-auto text-xs text-slate-500">{stats.total_finalized} OKR{stats.total_finalized !== 1 ? "s" : ""} finalizados</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <ThumbsUp className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-lg font-bold text-emerald-300">{stats.productive_count}</p>
+                <p className="text-xs text-emerald-500">Productivos</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+              <ThumbsDown className="w-5 h-5 text-red-400 shrink-0" />
+              <div>
+                <p className="text-lg font-bold text-red-300">{stats.not_productive_count}</p>
+                <p className="text-xs text-red-500">No productivos</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-700/40 border border-slate-600/30">
+              <Clock className="w-5 h-5 text-slate-400 shrink-0" />
+              <div>
+                <p className="text-lg font-bold text-slate-300">{stats.pending_productivity}</p>
+                <p className="text-xs text-slate-500">Sin criterio</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Barra de productividad */}
+          {stats.total_finalized > 0 && (
+            <div className="space-y-1.5">
+              <div className="w-full h-2 bg-navy-700 rounded-full overflow-hidden flex">
+                <div
+                  className="h-full bg-emerald-500 transition-all"
+                  style={{ width: `${(stats.productive_count / stats.total_finalized) * 100}%` }}
+                />
+                <div
+                  className="h-full bg-red-500 transition-all"
+                  style={{ width: `${(stats.not_productive_count / stats.total_finalized) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                {stats.total_finalized > 0
+                  ? `${Math.round((stats.productive_count / stats.total_finalized) * 100)}% de OKRs finalizados fueron productivos`
+                  : ""}
+              </p>
+            </div>
+          )}
+
+          {/* Fechas de vencimiento */}
+          <div className="flex gap-3 pt-1">
+            {stats.expired_okrs > 0 && (
+              <div className="flex items-center gap-2 text-xs text-red-400">
+                <CalendarClock className="w-3.5 h-3.5" />
+                {stats.expired_okrs} OKR{stats.expired_okrs !== 1 ? "s" : ""} con fecha vencida
+              </div>
+            )}
+            {stats.upcoming_okrs > 0 && (
+              <div className="flex items-center gap-2 text-xs text-amber-400">
+                <CalendarClock className="w-3.5 h-3.5" />
+                {stats.upcoming_okrs} OKR{stats.upcoming_okrs !== 1 ? "s" : ""} con fecha activa
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* Alerta si hay proyectos sin evaluar */}
       {stats.pending_evaluation > 0 && (

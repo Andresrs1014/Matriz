@@ -7,20 +7,23 @@ import app.models  # noqa: F401
 
 from app.config import settings
 from app.core.ws_manager import ws_manager
-from app.database import create_db_and_tables, get_engine
+from app.database import create_db_and_tables, run_migrations, get_engine
 from app.routes.auth      import router as auth_router
 from app.routes.projects  import router as projects_router
 from app.routes.matrix    import router as matrix_router
 from app.routes.webhook   import router as webhook_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.settings  import router as settings_router
+from app.routes.roi       import router as roi_router
 from app.seeds.questions_seed import seed_matrix_questions
 from app.seeds.admin_seed     import seed_superadmin
-
+from app.routes.comments import router as comments_router
+from app.routes.drafts import router as drafts_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    run_migrations()
     engine = get_engine()
     with Session(engine) as db:
         seed_matrix_questions(db)
@@ -44,6 +47,9 @@ app.include_router(matrix_router)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
 app.include_router(settings_router)
+app.include_router(roi_router)
+app.include_router(comments_router)
+app.include_router(drafts_router)
 
 
 @app.websocket("/ws")
@@ -58,4 +64,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/health", tags=["Health"])
 def health():
-    return {"ok": True, "env": settings.env, "version": "0.4.0"}
+    return {"ok": True, "env": settings.env, "version": "0.2.2"}

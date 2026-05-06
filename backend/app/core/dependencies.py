@@ -1,18 +1,16 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose.exceptions import JWTError
 from sqlmodel import Session, select
-
+from jose.exceptions import JWTError
 from app.core.security import decode_token
-from app.database import get_session
+from app.database import get_engine
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
-
-def get_db(session: Session = Depends(get_session)) -> Session:
-    return session
-
+def get_db():
+    with Session(get_engine()) as session:
+        yield session
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -20,48 +18,35 @@ def get_current_user(
 ) -> User:
     try:
         payload = decode_token(token)
-        subject = payload.get("sub")
-        if not subject:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token inválido (sin subject)."
-            )
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado."
+            detail="Token inválido o expirado.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-
-    statement = select(User).where(User.email == subject)
-    user = db.exec(statement).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario no existe."
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuario inactivo."
-        )
+    email = payload.get("sub")
+    user  = db.exec(select(User).where(User.email == email)).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo.")
     return user
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Permite acceso a admin y superadmin."""
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de administrador."
-        )
-    return current_user
+# ── Guards por rol ─────────────────────────────────────────────────────────────
+ROLES_HIERARCHY = {"usuario": 0, "coordinador": 1, "admin": 2, "superadmin": 3}
 
+def _require_role(min_role: str):
+    def guard(current_user: User = Depends(get_current_user)) -> User:
+        user_level = ROLES_HIERARCHY.get(current_user.role, -1)
+        min_level  = ROLES_HIERARCHY.get(min_role, 99)
+        if user_level < min_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Se requiere rol '{min_role}' o superior."
+            )
+        return current_user
+    return guard
 
-def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
-    """Permite acceso solo a superadmin."""
-    if current_user.role != "superadmin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de superadministrador."
-        )
-    return current_user
+# Guards listos para usar en cualquier ruta
+require_coordinador = _require_role("coordinador")
+require_admin       = _require_role("admin")
+require_superadmin  = _require_role("superadmin")

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from typing import cast
+from sqlmodel import Session, select, col
 
 from app.core.dependencies import get_db, require_admin
 from app.models.matrix import QuestionCategory, MatrixQuestion
@@ -21,14 +22,14 @@ def list_categories(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    categories = db.exec(select(QuestionCategory).order_by(QuestionCategory.id)).all()
+    categories = db.exec(select(QuestionCategory).order_by(col(QuestionCategory.id))).all()
     result = []
     for cat in categories:
         count = len(db.exec(
             select(MatrixQuestion).where(MatrixQuestion.category_id == cat.id)
         ).all())
         result.append(CategoryRead(
-            id=cat.id, name=cat.name, description=cat.description,
+            id=cast(int, cat.id), name=cat.name, description=cat.description,
             is_active=cat.is_active, is_default=cat.is_default,
             question_count=count,
         ))
@@ -53,7 +54,7 @@ def create_category(
     db.commit()
     db.refresh(cat)
     return CategoryRead(
-        id=cat.id, name=cat.name, description=cat.description,
+        id=cast(int, cat.id), name=cat.name, description=cat.description,
         is_active=cat.is_active, is_default=cat.is_default,
         question_count=0,
     )
@@ -85,7 +86,7 @@ def update_category(
 
     count = len(db.exec(select(MatrixQuestion).where(MatrixQuestion.category_id == cat.id)).all())
     return CategoryRead(
-        id=cat.id, name=cat.name, description=cat.description,
+        id=cast(int, cat.id), name=cat.name, description=cat.description,
         is_active=cat.is_active, is_default=cat.is_default,
         question_count=count,
     )
@@ -120,7 +121,7 @@ def list_all_questions(
     _: User = Depends(require_admin),
 ):
     questions = db.exec(
-        select(MatrixQuestion).order_by(MatrixQuestion.category_id, MatrixQuestion.order)
+        select(MatrixQuestion).order_by(col(MatrixQuestion.category_id), col(MatrixQuestion.order))
     ).all()
     return [QuestionRead(**q.model_dump()) for q in questions]
 
@@ -134,7 +135,7 @@ def list_questions_by_category(
     questions = db.exec(
         select(MatrixQuestion)
         .where(MatrixQuestion.category_id == cat_id)
-        .order_by(MatrixQuestion.order)
+        .order_by(col(MatrixQuestion.order))
     ).all()
     return [QuestionRead(**q.model_dump()) for q in questions]
 

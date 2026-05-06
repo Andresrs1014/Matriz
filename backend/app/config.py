@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Project Matrix API"
     env: str = "local"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
 
     secret_key: str = "CHANGE_ME"
     access_token_expire_minutes: int = 480
