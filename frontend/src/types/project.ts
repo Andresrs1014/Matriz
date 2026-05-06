@@ -22,6 +22,9 @@ export interface Project {
   approved_at: string | null
   final_approved_by: number | null
   final_approved_at: string | null
+  assigned_to_dev: boolean
+  assigned_to_dev_at: string | null
+  assigned_to_dev_by: number | null
   created_at: string
   updated_at: string
   /** Conteo de evidencias activas; ausente se trata como 0 */

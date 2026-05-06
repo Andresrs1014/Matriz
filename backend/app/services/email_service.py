@@ -13,6 +13,21 @@ from app.models.smtp_config import SMTPConfig
 logger = logging.getLogger(__name__)
 
 
+def _dedupe_email_recipients(emails: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in emails:
+        addr = (raw or "").strip()
+        if not addr:
+            continue
+        key = addr.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(addr)
+    return out
+
+
 def get_smtp_config(db: Session) -> SMTPConfig | None:
     return db.exec(select(SMTPConfig)).first()
 
@@ -94,6 +109,8 @@ async def send_actualizacion_notification(
     author_name: str,
     message: str,
 ) -> None:
+    from app.services.dev_team_service import get_team_emails
+
     config = get_smtp_config(db)
     if not config:
         return
@@ -116,7 +133,16 @@ async def send_actualizacion_notification(
         </p>
     </div>
     """
-    await send_email(db, config.notification_email, subject, body)
+    team = get_team_emails(db)
+    inbox = (config.notification_email or "").strip()
+    recipients = _dedupe_email_recipients([*team, inbox])
+    if not recipients:
+        logger.warning(
+            "[email] Actualización OKR sin destinatarios (sin equipo en settings ni notification_email)"
+        )
+        return
+    tasks = [send_email(db, addr, subject, body) for addr in recipients]
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def send_actualizacion_notification_detached(
@@ -138,4 +164,27 @@ async def send_actualizacion_notification_detached(
             )
     except Exception as e:
         logger.error("[email] send_actualizacion_notification_detached: %s", e)
+
+
+async def send_dev_assignment_notification_detached(
+    *,
+    project_title: str,
+    project_id: int,
+    assigned_by_name: str,
+    team_emails: list[str],
+) -> None:
+    """Segundo plano: evita usar el Session del request tras cerrar la petición."""
+    if not team_emails:
+        return
+    try:
+        with Session(get_engine()) as db:
+            await send_dev_assignment_notification(
+                db,
+                project_title=project_title,
+                project_id=project_id,
+                assigned_by_name=assigned_by_name,
+                team_emails=team_emails,
+            )
+    except Exception as e:
+        logger.error("[email] send_dev_assignment_notification_detached: %s", e)
 

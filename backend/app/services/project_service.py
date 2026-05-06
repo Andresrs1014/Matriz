@@ -195,3 +195,30 @@ def rechazar_proyecto(db: Session, project: Project, user: User) -> Project:
     db.commit()
     db.refresh(project)
     return project
+
+
+# ── Asignación interna a desarrollo (no altera la máquina de estados) ─────────
+
+def assign_project_to_development(db: Session, project_id: int, actor: User) -> Project:
+    project = get_project_any(db, project_id)
+    assert actor.id is not None
+    project.assigned_to_dev = True
+    project.assigned_to_dev_at = datetime.now(timezone.utc)
+    project.assigned_to_dev_by = actor.id
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def clear_development_assignment(db: Session, project_id: int) -> Project:
+    project = get_project_any(db, project_id)
+    project.assigned_to_dev = False
+    project.assigned_to_dev_at = None
+    project.assigned_to_dev_by = None
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project

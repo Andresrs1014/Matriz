@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from fastapi import HTTPException, status
 from sqlmodel import Session, select, col
@@ -8,6 +9,8 @@ from app.models.project import Project
 from app.models.user import User
 from app.schemas.comment import CommentCreate
 from app.services.email_service import send_actualizacion_notification_detached
+
+logger = logging.getLogger(__name__)
 
 
 def create_comment(
@@ -46,14 +49,26 @@ async def create_comment_with_email(
         return comment
     project_title = project.title
     author_name = author.full_name or author.email
-    asyncio.create_task(
-        send_actualizacion_notification_detached(
-            project_title=project_title,
-            project_id=project_id,
-            author_name=author_name,
-            message=payload.message,
+    try:
+        asyncio.create_task(
+            send_actualizacion_notification_detached(
+                project_title=project_title,
+                project_id=project_id,
+                author_name=author_name,
+                message=payload.message,
+            )
         )
-    )
+    except RuntimeError:
+        logger.warning(
+            "[comment] No hay event loop para programar email de actualización (proyecto %s)",
+            project_id,
+            exc_info=False,
+        )
+    except Exception:
+        logger.exception(
+            "[comment] No se programó email de actualización (proyecto %s)",
+            project_id,
+        )
     return comment
 
 
@@ -68,9 +83,10 @@ def get_comments(
     )
     if author_id is not None:
         query = query.where(
-            (ProjectComment.author_id == author_id) |
-            (ProjectComment.tipo == "feedback") |
-            (ProjectComment.tipo == "cambio_estado")
+            (ProjectComment.author_id == author_id)
+            | (ProjectComment.tipo == "feedback")
+            | (ProjectComment.tipo == "cambio_estado")
+            | (ProjectComment.tipo == "actualizacion")
         )
     query = query.order_by(col(ProjectComment.created_at).asc())
     return list(db.exec(query).all())

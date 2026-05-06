@@ -2,7 +2,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, col
 from datetime import datetime, timezone, timedelta
+import asyncio
 import json
+import logging
 from app.core.dependencies import (
     get_db, get_current_user,
     require_admin, require_superadmin,
@@ -22,7 +24,10 @@ from app.services.project_service import (
     escalar_proyecto, superaprobar_proyecto, iniciar_evaluacion,
     marcar_evaluado, registrar_salario, iniciar_calculo_roi,
     aprobacion_final, rechazar_proyecto,
+    assign_project_to_development, clear_development_assignment,
 )
+from app.services.dev_team_service import get_team_emails
+from app.services.email_service import send_dev_assignment_notification_detached
 from app.services.evidence_service import count_active_evidences, evidence_counts_by_project_ids
 from app.services.comment_service import create_status_comment
 from app.services.roi_service import (
@@ -31,6 +36,8 @@ from app.services.roi_service import (
 from app.core.ws_manager import ws_manager
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_collaborators(raw: str | None) -> list[str]:
@@ -593,4 +600,57 @@ async def actualizar_due_date(
     db.add(project)
     db.commit()
     db.refresh(project)
+    return _read_with_evidence_count(db, project)
+
+
+# ── Asignación interna al área de Desarrollo (superadmin; no cambia estado del flujo) ──
+
+
+@router.post("/{project_id}/assign-to-dev", response_model=ProjectRead)
+async def assign_to_dev(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    project = assign_project_to_development(db, project_id, current_user)
+    actor_label = current_user.full_name or current_user.email or ""
+    sc = create_status_comment(
+        db, project_id, current_user,
+        f"Proyecto asignado al Área de Desarrollo por {actor_label}.",
+    )
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
+    await ws_manager.broadcast("project.assigned_dev", {"id": project_id})
+
+    team_snapshot = list(get_team_emails(db))
+    title_snapshot = project.title
+    if team_snapshot:
+        try:
+            asyncio.create_task(
+                send_dev_assignment_notification_detached(
+                    project_title=title_snapshot,
+                    project_id=project_id,
+                    assigned_by_name=actor_label,
+                    team_emails=team_snapshot,
+                )
+            )
+        except RuntimeError:
+            logger.warning("[assign-to-dev] No se programó correo al equipo (sin event loop)")
+        except Exception:
+            logger.exception("[assign-to-dev] No se programó correo al equipo")
+
+    return _read_with_evidence_count(db, project)
+
+
+@router.delete("/{project_id}/assign-to-dev", response_model=ProjectRead)
+async def unassign_from_dev(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    project = clear_development_assignment(db, project_id)
+    await ws_manager.broadcast("project.unassigned_dev", {"id": project_id})
     return _read_with_evidence_count(db, project)

@@ -20,6 +20,8 @@ from app.seeds.admin_seed     import seed_superadmin
 from app.routes.comments import router as comments_router
 from app.routes.drafts import router as drafts_router
 from app.routes.evidence import router as evidence_router
+from app.routes.dev_team import router as dev_team_router
+from app.routes.smtp_config import router as smtp_config_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,6 +54,8 @@ app.include_router(roi_router)
 app.include_router(comments_router)
 app.include_router(drafts_router)
 app.include_router(evidence_router)
+app.include_router(dev_team_router)
+app.include_router(smtp_config_router)
 
 
 @app.websocket("/ws")

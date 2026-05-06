@@ -95,6 +95,23 @@ export function useProjectActions() {
     })
   }
 
+  /** Superadmin: marca ejecución por área de Desarrollo (no cambia el estado del flujo). */
+  async function assignToDev(projectId: number) {
+    return exec(async () => {
+      const { data } = await api.post<Project>(`/projects/${projectId}/assign-to-dev`)
+      _updateLocal(data)
+      return data
+    })
+  }
+
+  async function unassignFromDev(projectId: number) {
+    return exec(async () => {
+      const { data } = await api.delete<Project>(`/projects/${projectId}/assign-to-dev`)
+      _updateLocal(data)
+      return data
+    })
+  }
+
   // Obtener preguntas asignadas al proyecto
   async function getProjectQuestions(projectId: number): Promise<ProjectQuestion[]> {
     const result = await exec(async () => {
@@ -108,6 +125,6 @@ export function useProjectActions() {
     loading, error,
     escalar, superaprobar, iniciarEvaluacion,
     marcarEvaluado, proveerSalario, completarROI,
-    rechazar, getProjectQuestions,
+    rechazar, assignToDev, unassignFromDev, getProjectQuestions,
   }
 }

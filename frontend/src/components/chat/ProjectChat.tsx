@@ -18,6 +18,7 @@ const TIPO_COLORS: Record<string, string> = {
   comentario:    "border-slate-700/50 bg-slate-800/40",
   feedback:      "border-blue-500/20 bg-blue-500/5",
   cambio_estado: "border-amber-500/20 bg-amber-500/5",
+  actualizacion: "border-purple-500/20 bg-purple-500/5",
   aprobacion:    "border-emerald-500/20 bg-emerald-500/5",
 }
 
@@ -28,10 +29,18 @@ const ROLE_COLORS: Record<string, string> = {
   usuario:     "text-slate-300",
 }
 
-const TIPOS_DISPONIBLES = [
+/** Staff: tipos de mensaje en el hilo + actualización que notifica al equipo. */
+const TIPOS_STAFF = [
   { value: "comentario",    label: "Comentario" },
   { value: "feedback",      label: "Feedback" },
   { value: "cambio_estado", label: "Estado" },
+  { value: "actualizacion", label: "Actualización OKR" },
+]
+
+/** Dueño del proyecto: comentario normal o aviso al equipo (dispara email). */
+const TIPOS_USUARIO = [
+  { value: "comentario",    label: "Comentario" },
+  { value: "actualizacion", label: "Actualización al equipo" },
 ]
 
 export default function ProjectChat({ projectId }: Props) {
@@ -52,8 +61,15 @@ export default function ProjectChat({ projectId }: Props) {
   useEffect(() => {
     if (!lastCommentEvent || lastCommentEvent.projectId !== projectId) return
     const incoming = lastCommentEvent.comment
-    // Filtrar para usuarios: solo sus mensajes + feedback/cambio_estado
-    if (esUsuario && incoming.author_id !== user?.id && incoming.tipo !== "feedback" && incoming.tipo !== "cambio_estado") return
+    // Filtrar para usuarios: sus mensajes + tipos públicos relevantes para el proyecto
+    if (
+      esUsuario &&
+      incoming.author_id !== user?.id &&
+      incoming.tipo !== "feedback" &&
+      incoming.tipo !== "cambio_estado" &&
+      incoming.tipo !== "actualizacion"
+    )
+      return
     setComments((prev) => {
       if (prev.some((c) => c.id === incoming.id)) return prev
       return [...prev, incoming]
@@ -77,6 +93,10 @@ export default function ProjectChat({ projectId }: Props) {
   }, [fetchComments])
 
   useEffect(() => {
+    setTipo("comentario")
+  }, [projectId])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [comments])
 
@@ -86,12 +106,14 @@ export default function ProjectChat({ projectId }: Props) {
     try {
       const { data: newComment } = await api.post<Comment>(`/projects/${projectId}/comments`, {
         message: message.trim(),
-        tipo: esUsuario ? "comentario" : tipo,
+        tipo,
       })
       setMessage("")
       setComments((prev) =>
         prev.some((c) => c.id === newComment.id) ? prev : [...prev, newComment]
       )
+    } catch {
+      toast.error("No se pudo enviar el comentario. Intenta de nuevo.")
     } finally {
       setSending(false)
     }
@@ -122,7 +144,11 @@ export default function ProjectChat({ projectId }: Props) {
       {esUsuario && (
         <div className="flex items-center gap-1.5 px-4 py-2 bg-slate-800/60 border-b border-slate-700/50 text-xs text-slate-500">
           <Info className="w-3 h-3 shrink-0" />
-          Solo ves los mensajes relevantes para tu proyecto
+          <span>
+            Solo ves los mensajes relevantes para tu proyecto. Con{" "}
+            <span className="text-slate-400">Actualización al equipo</span> el avance se envía por
+            correo al equipo (si está configurado).
+          </span>
         </div>
       )}
 
@@ -195,19 +221,31 @@ export default function ProjectChat({ projectId }: Props) {
 
       {/* Input */}
       <div className="px-4 py-3 border-t border-slate-700/50 space-y-2">
-        {puedeElegiTipo && (
-          <div className="flex gap-1.5">
-            {TIPOS_DISPONIBLES.map((t) => (
-              <button key={t.value} onClick={() => setTipo(t.value)}
-                className={cn(
-                  "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all",
-                  tipo === t.value
-                    ? "bg-electric/20 border-electric/40 text-electric"
-                    : "border-slate-700/40 text-slate-600 hover:text-slate-300"
-                )}>
-                {t.label}
-              </button>
-            ))}
+        {(puedeElegiTipo || esUsuario) && (
+          <div className="space-y-1">
+            <div className="flex gap-1.5 flex-wrap">
+              {(esUsuario ? TIPOS_USUARIO : TIPOS_STAFF).map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setTipo(t.value)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all",
+                    tipo === t.value
+                      ? "bg-electric/20 border-electric/40 text-electric"
+                      : "border-slate-700/40 text-slate-600 hover:text-slate-300"
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {esUsuario && tipo === "actualizacion" && (
+              <p className="text-[10px] text-slate-500 leading-snug">
+                El mensaje quedará en el historial y se intentará notificar por correo a quienes estén
+                en el equipo de desarrollo y al correo de notificaciones en ajustes.
+              </p>
+            )}
           </div>
         )}
         <div className="flex gap-2">
