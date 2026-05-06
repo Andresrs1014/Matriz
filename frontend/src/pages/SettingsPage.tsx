@@ -138,7 +138,7 @@ export default function SettingsPage() {
       {/* Tab Integraciones — catálogo: admin+; equipo/correo: solo superadmin */}
       {tab === "integraciones" && isAdmin(me) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start max-w-[1400px]">
-          <div className="glass-card p-5 border border-electric/10">
+          <div className="glass-card min-w-0 p-5 border border-electric/10">
             <p className="text-sm font-semibold text-white mb-1">Áreas y sedes</p>
             <p className="text-xs text-slate-500 mb-4">
               Listas para asignar a usuarios. Solo admin o superadmin las editan.

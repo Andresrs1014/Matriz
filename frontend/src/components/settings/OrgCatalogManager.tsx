@@ -107,22 +107,22 @@ export default function OrgCatalogManager() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="rounded-xl border border-navy-600 bg-navy-900/40 p-4 space-y-3">
+    <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="min-w-0 rounded-xl border border-navy-600 bg-navy-900/40 p-4 space-y-3">
         <p className="text-sm font-semibold text-white">Áreas</p>
         <p className="text-[11px] text-slate-500">Valores del desplegable &quot;Área&quot; en usuarios.</p>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <input
             value={newArea}
             onChange={(e) => setNewArea(e.target.value)}
             placeholder="Nombre del área"
-            className="flex-1 px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-navy-600 bg-navy-800 px-3 text-sm text-white placeholder:text-slate-500"
           />
           <button
             type="button"
             onClick={() => void addArea()}
             disabled={busy === "area"}
-            className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-electric/15 border border-electric/30 text-electric text-sm"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-electric/30 bg-electric/15 px-3 text-sm font-medium text-electric"
           >
             {busy === "area" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Añadir
@@ -147,21 +147,21 @@ export default function OrgCatalogManager() {
         </ul>
       </div>
 
-      <div className="rounded-xl border border-navy-600 bg-navy-900/40 p-4 space-y-3">
+      <div className="min-w-0 rounded-xl border border-navy-600 bg-navy-900/40 p-4 space-y-3">
         <p className="text-sm font-semibold text-white">Sedes (plataforma)</p>
         <p className="text-[11px] text-slate-500">Ej. Logimat, IMCargo — tú defines los nombres.</p>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <input
             value={newSite}
             onChange={(e) => setNewSite(e.target.value)}
             placeholder="Nombre de la sede"
-            className="flex-1 px-3 py-2 rounded-lg bg-navy-800 border border-navy-600 text-white text-sm"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-navy-600 bg-navy-800 px-3 text-sm text-white placeholder:text-slate-500"
           />
           <button
             type="button"
             onClick={() => void addSite()}
             disabled={busy === "site"}
-            className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-electric/15 border border-electric/30 text-electric text-sm"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-electric/30 bg-electric/15 px-3 text-sm font-medium text-electric"
           >
             {busy === "site" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Añadir
