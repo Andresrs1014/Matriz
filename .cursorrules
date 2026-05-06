@@ -1,0 +1,32 @@
+# Matriz — Cursor Rules
+
+## Stack
+- Backend: FastAPI + SQLModel + SQLite (Python 3.11)
+- Frontend: React 19 + TypeScript + Tailwind v3 + Zustand (+ TanStack Query cuando se incorporen los hooks del plan de mejoras)
+- No Alembic. Migraciones manuales en backend/app/database.py → run_migrations()
+- No fastapi-mail. Email con aiosmtplib directo (cuando se implemente esa fase).
+
+## Patrones obligatorios
+- Lógica de negocio SOLO en backend/app/services/
+- Routes SOLO orquestan (validar → llamar service → retornar)
+- Modelos nuevos: registrar en backend/app/models/__init__.py
+- Columnas nuevas en tablas existentes: agregar en run_migrations()
+- Cambios de estado de proyecto: usar create_status_comment() del comment_service
+- Broadcasts WebSocket: await ws_manager.broadcast(event_type, payload)
+
+## Convenciones de nombrado
+- Archivos Python: snake_case
+- Archivos TypeScript/React: PascalCase para componentes, camelCase para hooks/utils
+- Endpoints REST: kebab-case (/assign-to-dev, /smtp-config)
+- Eventos WebSocket: entidad.accion (project.assigned_dev, smtp.updated)
+
+## NO hacer
+- No usar Alembic
+- No usar fastapi-mail
+- No hardcodear emails ni credenciales SMTP en código fuente
+- No poner lógica de negocio en routes
+- No crear archivos de migración Alembic separados
+- No inventar tipos de comentario fuera del plan (p. ej. actualizacion está definido ahí)
+
+## Documento maestro del proyecto
+- Respetar además `.rules.md` en la raíz del repo cuando haya discrepancia menor.

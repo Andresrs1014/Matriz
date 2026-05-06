@@ -91,6 +91,14 @@ def run_migrations() -> None:
         # SQLite 3.35+ soporta DROP COLUMN
         ("roievaluation.drop_horas_proyectadas",
          "ALTER TABLE roievaluation DROP COLUMN horas_proyectadas"),
+
+        # ── Asignación interna a desarrollo (plan mejoras) ─────────────────────
+        ("project.assigned_to_dev",
+         "ALTER TABLE project ADD COLUMN assigned_to_dev INTEGER NOT NULL DEFAULT 0"),
+        ("project.assigned_to_dev_at",
+         "ALTER TABLE project ADD COLUMN assigned_to_dev_at DATETIME"),
+        ("project.assigned_to_dev_by",
+         "ALTER TABLE project ADD COLUMN assigned_to_dev_by INTEGER"),
     ]
 
     with engine.connect() as conn:

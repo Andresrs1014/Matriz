@@ -34,6 +34,15 @@ class Project(SQLModel, table=True):
     final_approved_by: Optional[int] = Field(default=None, nullable=True)
     final_approved_at: Optional[datetime] = Field(default=None, nullable=True)
 
+    # Asignación interna al área de Desarrollo e Innovación (no altera la state machine)
+    assigned_to_dev: bool = Field(default=False, nullable=False)
+    assigned_to_dev_at: Optional[datetime] = Field(default=None, nullable=True)
+    assigned_to_dev_by: Optional[int] = Field(
+        default=None,
+        nullable=True,
+        foreign_key="user.id",
+    )
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         nullable=False,

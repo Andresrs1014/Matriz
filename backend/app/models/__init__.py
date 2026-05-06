@@ -7,6 +7,8 @@ from app.models.roi import ROIEvaluation
 from app.models.comment import ProjectComment
 from app.models.draft import ProjectDraft
 from app.models.evidence import ProjectEvidence
+from app.models.dev_team import DevTeamMember
+from app.models.smtp_config import SMTPConfig
 
 __all__ = [
     "User",
@@ -20,4 +22,6 @@ __all__ = [
     "ProjectComment",
     "ProjectDraft",
     "ProjectEvidence",
+    "DevTeamMember",
+    "SMTPConfig",
 ]
