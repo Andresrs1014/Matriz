@@ -36,6 +36,32 @@ export function formatBytes(n: number): string {
   return `${parseFloat((n / k ** i).toFixed(1))} ${sizes[i]}`
 }
 
+/** Qué tipo de vista previa podemos mostrar en la app (sin descargar obligatoriamente). */
+export type EvidencePreviewKind = "image" | "pdf" | "text" | "office" | "none"
+
+export function getEvidencePreviewKind(ev: {
+  mime_type: string
+  extension: string
+}): EvidencePreviewKind {
+  const ext = ev.extension.toLowerCase()
+  const mime = ev.mime_type.toLowerCase()
+  if (mime.startsWith("image/")) return "image"
+  if (mime === "application/pdf" || ext === "pdf") return "pdf"
+  if (
+    mime.startsWith("text/") ||
+    ext === "txt" ||
+    ext === "md" ||
+    ext === "csv" ||
+    mime === "text/csv" ||
+    mime === "text/markdown" ||
+    mime === "text/plain"
+  ) {
+    return "text"
+  }
+  if (["xlsx", "xls", "doc", "docx", "rtf"].includes(ext)) return "office"
+  return "none"
+}
+
 export function iconForExtension(ext: string): LucideIcon {
   switch (ext.toLowerCase()) {
     case "xlsx":

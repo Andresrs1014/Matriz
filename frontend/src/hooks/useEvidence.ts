@@ -1,6 +1,7 @@
 // frontend/src/hooks/useEvidence.ts
 import { useCallback, useState } from "react"
 import api from "@/lib/api"
+import { toast } from "@/store/toastStore"
 import type { Evidence } from "@/types/evidence"
 
 export function useEvidence() {
@@ -12,10 +13,14 @@ export function useEvidence() {
     setError(null)
     try {
       const { data } = await api.get(`/projects/${projectId}/evidence`)
-      return data
+      return Array.isArray(data) ? data : []
     } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? "Error al cargar evidencias."
+      const msg =
+        typeof err?.response?.data?.detail === "string"
+          ? err.response.data.detail
+          : "Error al cargar evidencias."
       setError(msg)
+      toast.error(msg)
       return []
     } finally {
       setLoading(false)
@@ -65,9 +70,27 @@ export function useEvidence() {
     }
   }, [])
 
-  const downloadEvidence = useCallback((projectId: number, evidenceId: number): string => {
-    return `${api.defaults.baseURL}/projects/${projectId}/evidence/${evidenceId}/download`
-  }, [])
+  /**
+   * Descarga con el mismo cliente axios (JWT). No usar window.open a la URL del API:
+   * las pestañas nuevas no envían Authorization y el backend devuelve 401.
+   */
+  const downloadEvidenceFile = useCallback(
+    async (projectId: number, evidenceId: number, filename: string): Promise<void> => {
+      const { data } = await api.get(`/projects/${projectId}/evidence/${evidenceId}/download`, {
+        responseType: "blob",
+      })
+      const blobUrl = URL.createObjectURL(data)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      a.download = filename || "evidencia"
+      a.rel = "noopener"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(blobUrl)
+    },
+    []
+  )
 
   return {
     loading,
@@ -75,7 +98,7 @@ export function useEvidence() {
     listEvidence,
     uploadEvidence,
     deleteEvidence,
-    downloadEvidence,
+    downloadEvidenceFile,
     clearError: () => setError(null),
   }
 }

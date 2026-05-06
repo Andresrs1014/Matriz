@@ -52,7 +52,7 @@ function LiveUploader({
   canUpload: boolean
   canDelete: (evidence: Evidence) => boolean
 }) {
-  const { listEvidence, uploadEvidence, deleteEvidence, downloadEvidence, loading } = useEvidence()
+  const { listEvidence, uploadEvidence, deleteEvidence, downloadEvidenceFile, loading } = useEvidence()
   const [evidences, setEvidences] = useState<Evidence[]>([])
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const { lastEvent } = useEvidenceEventStore()
@@ -102,11 +102,18 @@ function LiveUploader({
   )
 
   const handleDownload = useCallback(
-    (evidence: Evidence) => {
-      const url = downloadEvidence(projectId, evidence.id)
-      window.open(url, "_blank")
+    async (evidence: Evidence) => {
+      try {
+        await downloadEvidenceFile(projectId, evidence.id, evidence.filename)
+      } catch (err: any) {
+        const msg =
+          typeof err?.response?.data?.detail === "string"
+            ? err.response.data.detail
+            : "No se pudo descargar el archivo."
+        toast.error(msg)
+      }
     },
-    [downloadEvidence, projectId]
+    [downloadEvidenceFile, projectId]
   )
 
   return (

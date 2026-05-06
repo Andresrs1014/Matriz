@@ -40,6 +40,25 @@ def _check_access(project: Project, current_user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso a este proyecto.")
 
 
+def _to_evidence_read(ev: ProjectEvidence, project_id: int) -> EvidenceRead:
+    assert ev.id is not None
+    return EvidenceRead(
+        id=ev.id,
+        project_id=ev.project_id,
+        uploaded_by=ev.uploaded_by,
+        uploader_name=ev.uploader_name,
+        uploader_role=ev.uploader_role,
+        filename=ev.filename,
+        mime_type=ev.mime_type,
+        extension=ev.extension,
+        size_bytes=ev.size_bytes,
+        sha256=ev.sha256,
+        description=ev.description,
+        created_at=ev.created_at,
+        download_url=f"/projects/{project_id}/evidence/{ev.id}/download",
+    )
+
+
 @router.get("", response_model=list[EvidenceRead])
 def list_evidences(
     project_id: int,
@@ -49,10 +68,7 @@ def list_evidences(
     project = _get_project_or_404(project_id, db)
     _check_access(project, current_user)
     evidences = list_active_evidences(db, project_id)
-    # Construir download_url relativo al request
-    for ev in evidences:
-        ev.download_url = f"/projects/{project_id}/evidence/{ev.id}/download"
-    return evidences
+    return [_to_evidence_read(ev, project_id) for ev in evidences]
 
 
 @router.post("", response_model=EvidenceRead, status_code=status.HTTP_201_CREATED)
