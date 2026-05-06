@@ -91,12 +91,20 @@ function LiveUploader({
   )
 
   const handleDelete = useCallback(
-    async (evidence: Evidence) => {
+    async (evidence: Evidence): Promise<boolean> => {
+      if (
+        !window.confirm(
+          `¿Eliminar “${evidence.filename}”? Desaparecerá de la lista (borrado lógico en el sistema).`
+        )
+      ) {
+        return false
+      }
       const ok = await deleteEvidence(projectId, evidence.id)
       if (ok) {
         toast.success("Evidencia eliminada")
         fetch()
       }
+      return ok
     },
     [deleteEvidence, projectId, fetch]
   )

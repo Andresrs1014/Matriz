@@ -90,7 +90,8 @@ export function canUploadEvidence(user: User | null, projectOwnerId: number, pro
 
 export function canDeleteEvidence(user: User | null, evidenceUploaderId: number): boolean {
   if (isAdmin(user) || isSuperAdmin(user)) return true
-  return user?.id === evidenceUploaderId
+  if (user?.id == null) return false
+  return Number(user.id) === Number(evidenceUploaderId)
 }
 
 /** Admin o superadmin pueden rechazar en cualquier etapa */

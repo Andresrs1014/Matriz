@@ -9,13 +9,19 @@ import type { Evidence } from "@/types/evidence"
 interface EvidenceCardProps {
   evidence: Evidence
   canDelete: boolean
-  onDelete: (evidence: Evidence) => void
+  onDelete: (evidence: Evidence) => boolean | Promise<boolean>
   onDownload: (evidence: Evidence) => void | Promise<void>
 }
 
 export default function EvidenceCard({ evidence, canDelete, onDelete, onDownload }: EvidenceCardProps) {
   const Icon = iconForExtension(evidence.extension)
   const [previewOpen, setPreviewOpen] = useState(false)
+
+  async function runDelete(ev: Evidence) {
+    const result = onDelete(ev)
+    const ok = result instanceof Promise ? await result : result
+    if (ok) setPreviewOpen(false)
+  }
 
   const date = new Date(evidence.created_at).toLocaleDateString("es-CO", {
     year: "numeric",
@@ -80,8 +86,8 @@ export default function EvidenceCard({ evidence, canDelete, onDelete, onDownload
           {canDelete && (
             <button
               type="button"
-              onClick={() => onDelete(evidence)}
-              title="Eliminar"
+              onClick={() => void runDelete(evidence)}
+              title="Eliminar de la plataforma"
               className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
             >
               <Trash2 className="h-4 w-4" />
@@ -95,6 +101,8 @@ export default function EvidenceCard({ evidence, canDelete, onDelete, onDownload
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         onDownload={onDownload}
+        canDelete={canDelete}
+        onDelete={() => void runDelete(evidence)}
       />
     </>
   )

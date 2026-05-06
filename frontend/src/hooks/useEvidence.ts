@@ -61,8 +61,12 @@ export function useEvidence() {
       await api.delete(`/projects/${projectId}/evidence/${evidenceId}`)
       return true
     } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? "Error al eliminar evidencia."
+      const msg =
+        typeof err?.response?.data?.detail === "string"
+          ? err.response.data.detail
+          : "Error al eliminar evidencia."
       setError(msg)
+      toast.error(msg)
       return false
     } finally {
       setLoading(false)

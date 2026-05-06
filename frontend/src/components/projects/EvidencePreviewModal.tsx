@@ -16,6 +16,10 @@ interface EvidencePreviewModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onDownload: (evidence: Evidence) => void | Promise<void>
+  /** Si puedes borrar esta evidencia, muestra acción en el pie del modal */
+  canDelete?: boolean
+  /** Sin argumentos: ya está ligada al archivo del modal */
+  onDelete?: () => void | Promise<void>
 }
 
 export default function EvidencePreviewModal({
@@ -23,6 +27,8 @@ export default function EvidencePreviewModal({
   open,
   onOpenChange,
   onDownload,
+  canDelete = false,
+  onDelete,
 }: EvidencePreviewModalProps) {
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -155,7 +161,7 @@ export default function EvidencePreviewModal({
           )}
         </div>
 
-        <DialogFooter className="border-t border-slate-700/80 bg-slate-900/95 px-5 py-3 sm:justify-between">
+        <DialogFooter className="flex flex-col gap-2 border-t border-slate-700/80 bg-slate-900/95 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
@@ -163,13 +169,24 @@ export default function EvidencePreviewModal({
           >
             Cerrar
           </button>
-          <button
-            type="button"
-            onClick={() => void onDownload(evidence)}
-            className="rounded-lg bg-electric/90 px-4 py-2 text-sm font-medium text-white hover:bg-electric"
-          >
-            Descargar copia
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {canDelete && onDelete && (
+              <button
+                type="button"
+                onClick={() => void onDelete()}
+                className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20"
+              >
+                Eliminar evidencia
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void onDownload(evidence)}
+              className="rounded-lg bg-electric/90 px-4 py-2 text-sm font-medium text-white hover:bg-electric"
+            >
+              Descargar copia
+            </button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
