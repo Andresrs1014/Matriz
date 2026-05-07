@@ -241,3 +241,95 @@ async def send_dev_assignment_notification_detached(
     except Exception as e:
         logger.error("[email] send_dev_assignment_notification_detached: %s", e)
 
+
+async def send_fecha_extendida_notification(
+    db: Session,
+    project_title: str,
+    project_id: int,
+    old_due_date,
+    new_due_date,
+    author_name: str,
+    justificacion: str,
+) -> None:
+    """Notifica por email cuando se extiende la fecha de un proyecto."""
+    from datetime import datetime
+
+    config = get_smtp_config(db)
+    if not config:
+        return
+
+    # Formatear fechas
+    if old_due_date and isinstance(old_due_date, datetime):
+        old_str = old_due_date.strftime("%Y-%m-%d")
+    elif old_due_date:
+        old_str = str(old_due_date)[:10]
+    else:
+        old_str = "No definida"
+
+    if new_due_date and isinstance(new_due_date, datetime):
+        new_str = new_due_date.strftime("%Y-%m-%d")
+    else:
+        new_str = str(new_due_date)[:10]
+
+    safe_title = html.escape(project_title, quote=False)
+    safe_author = html.escape(author_name, quote=False)
+    safe_justificacion = html.escape(justificacion, quote=True).replace("\n", "<br/>")
+
+    subject = f"📅 Fecha extendida: {project_title}"
+    body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <h2 style="color: #E31E24;">Extensión de Fecha de Proyecto</h2>
+        <p><strong>Proyecto:</strong> {safe_title} (ID #{project_id})</p>
+        <p><strong>Extendido por:</strong> {safe_author}</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Fecha anterior</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{old_str}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Nueva fecha</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd; color: #E31E24; font-weight: bold;">{new_str}</td>
+            </tr>
+        </table>
+        <div style="background: #f5f5f5; padding: 16px; border-radius: 8px;
+                    border-left: 4px solid #E31E24; margin: 16px 0;">
+            <p style="margin: 0; font-weight: bold;">Justificación:</p>
+            <p style="margin: 8px 0 0 0;">{safe_justificacion}</p>
+        </div>
+        <hr style="border-color: #eee;" />
+        <p style="color: #999; font-size: 12px;">
+            Notificación automática — Matriz ZYMO
+        </p>
+    </div>
+    """
+    inbox = (config.notification_email or "").strip()
+    if not inbox:
+        logger.warning("[email] Fecha extendida sin notification_email configurado")
+        return
+    await send_email(db, inbox, subject, body)
+
+
+async def send_fecha_extendida_notification_detached(
+    *,
+    project_title: str,
+    project_id: int,
+    old_due_date,
+    new_due_date,
+    author_name: str,
+    justificacion: str,
+) -> None:
+    """Segundo plano: envía notificación de extensión de fecha."""
+    try:
+        with Session(get_engine()) as db:
+            await send_fecha_extendida_notification(
+                db,
+                project_title=project_title,
+                project_id=project_id,
+                old_due_date=old_due_date,
+                new_due_date=new_due_date,
+                author_name=author_name,
+                justificacion=justificacion,
+            )
+    except Exception as e:
+        logger.error("[email] send_fecha_extendida_notification_detached: %s", e)
+
