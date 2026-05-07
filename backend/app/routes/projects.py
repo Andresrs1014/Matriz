@@ -13,11 +13,13 @@ from app.models.project import Project
 from app.models.user import User
 from app.models.roi import ROIEvaluation
 from app.models.project_question import ProjectQuestion
+from app.models.work_catalog import WorkArea
 from app.schemas.project import (
     ProjectCreate, ProjectRead,
     SuperaprobacionInput, SalarioInput,
     DatosOperacionalesInput, ProjectQuestionRead,
     OkrProductiveInput, DueDateInput, ProjectEditInput,
+    AssignAreaInput,
 )
 from app.services.project_service import (
     get_project_any, create_project, delete_project, list_all_projects,
@@ -25,11 +27,17 @@ from app.services.project_service import (
     marcar_evaluado, registrar_salario, iniciar_calculo_roi,
     aprobacion_final, rechazar_proyecto,
     assign_project_to_development, clear_development_assignment,
+    assign_area as assign_project_area,
+    get_area_member_emails,
 )
 from app.services.dev_team_service import get_team_emails
-from app.services.email_service import send_dev_assignment_notification_detached
+from app.services.email_service import (
+    send_dev_assignment_notification_detached,
+    send_area_assignment_notification_detached,
+)
 from app.services.evidence_service import count_active_evidences, evidence_counts_by_project_ids
 from app.services.comment_service import create_status_comment
+from app.services import task_service as task_svc
 from app.services.roi_service import (
     _calcular_valor_hora, assign_roi_quadrant, completar_roi_calculo  # ← añadido
 )
@@ -52,8 +60,21 @@ def _parse_collaborators(raw: str | None) -> list[str]:
     return [str(item).strip() for item in data if str(item).strip()]
 
 
-def _to_read(p: Project, evidence_count: int = 0) -> ProjectRead:
+def _to_read(
+    db: Session,
+    p: Project,
+    current_user: User,
+    evidence_count: int = 0,
+    area_name_by_id: dict[int, str] | None = None,
+) -> ProjectRead:
     assert p.id is not None
+    assigned_area_name = None
+    if p.assigned_area_id:
+        if area_name_by_id is not None and p.assigned_area_id in area_name_by_id:
+            assigned_area_name = area_name_by_id[p.assigned_area_id]
+        else:
+            wa = db.get(WorkArea, p.assigned_area_id)
+            assigned_area_name = wa.name if wa else None
     return ProjectRead(
         id=p.id,
         title=p.title,
@@ -80,15 +101,22 @@ def _to_read(p: Project, evidence_count: int = 0) -> ProjectRead:
         assigned_to_dev=p.assigned_to_dev,
         assigned_to_dev_at=p.assigned_to_dev_at,
         assigned_to_dev_by=p.assigned_to_dev_by,
+        assigned_area_id=p.assigned_area_id,
+        assigned_area_at=p.assigned_area_at,
+        assigned_area_by=p.assigned_area_by,
+        assigned_area_name=assigned_area_name,
         created_at=p.created_at,
         updated_at=p.updated_at,
         evidence_count=evidence_count,
+        viewer_can_modify_tasks=task_svc.can_modify_tasks(db, p, current_user),
     )
 
 
-def _read_with_evidence_count(db: Session, p: Project) -> ProjectRead:
+def _read_with_evidence_count(
+    db: Session, p: Project, current_user: User
+) -> ProjectRead:
     assert p.id is not None
-    return _to_read(p, count_active_evidences(db, p.id))
+    return _to_read(db, p, current_user, count_active_evidences(db, p.id))
 
 
 # ── CRUD base ────────────────────────────────────────────────────────────────
@@ -111,7 +139,17 @@ def list_projects(
         ).all())
     ids = [p.id for p in projects if p.id is not None]
     ev_counts = evidence_counts_by_project_ids(db, ids)
-    return [_to_read(p, ev_counts.get(p.id, 0)) for p in projects]
+    area_ids = list({p.assigned_area_id for p in projects if p.assigned_area_id})
+    area_name_by_id: dict[int, str] | None = None
+    if area_ids:
+        area_name_by_id = {}
+        for row in db.exec(select(WorkArea).where(WorkArea.id.in_(area_ids))).all():
+            if row.id is not None:
+                area_name_by_id[row.id] = row.name
+    return [
+        _to_read(db, p, current_user, ev_counts.get(p.id, 0), area_name_by_id)
+        for p in projects
+    ]
 
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
@@ -152,7 +190,7 @@ async def create_project_endpoint(
         event_type="project.created",
         payload={"id": project.id, "title": project.title},
     )
-    return _to_read(project, 0)
+    return _to_read(db, project, current_user, 0)
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -166,7 +204,7 @@ def get_project(
         raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
     if current_user.role not in ("admin", "superadmin", "coordinador") and project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Sin acceso a este proyecto.")
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 @router.patch("/{project_id}", response_model=ProjectRead)
@@ -204,7 +242,7 @@ async def edit_project(
     db.commit()
     db.refresh(project)
     await ws_manager.broadcast("project.updated", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 @router.delete("/{project_id}")
@@ -242,7 +280,7 @@ async def escalar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.escalado", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Flujo Paso 2: Superadmin aprueba + asigna preguntas ──────────────────────
@@ -310,7 +348,7 @@ async def superaprobar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.superaprobado", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── GET preguntas asignadas al proyecto ──────────────────────────────────────
@@ -362,7 +400,7 @@ async def iniciar_eval(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.en_evaluacion", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Flujo Paso 4: Admin marca evaluado (tras llenar matrix) ──────────────────
@@ -388,7 +426,7 @@ async def marcar_eval(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.evaluado", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Flujo Paso 5: Superadmin provee salario ───────────────────────────────────
@@ -438,7 +476,7 @@ async def proveer_salario(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.pendiente_salario", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── NUEVO: Superadmin corrige salario mal ingresado ───────────────────────────
@@ -525,7 +563,7 @@ async def completar_roi(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.aprobado_final", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Rechazar (cualquier paso) ────────────────────────────────────────────────
@@ -548,7 +586,7 @@ async def rechazar(
         "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
     })
     await ws_manager.broadcast("project.rechazado", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Marcar productividad del OKR ──────────────────────────────────────────────
@@ -571,7 +609,7 @@ async def marcar_productividad(
     await ws_manager.broadcast("project.productividad", {
         "id": project_id, "productive": payload.productive
     })
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Cambiar fecha de vencimiento del OKR ─────────────────────────────────────
@@ -600,7 +638,86 @@ async def actualizar_due_date(
     db.add(project)
     db.commit()
     db.refresh(project)
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
+
+
+@router.post("/{project_id}/assign-area", response_model=ProjectRead)
+async def assign_area(
+    project_id: int,
+    payload: AssignAreaInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+
+    is_owner = project.owner_id == current_user.id
+    is_superadmin = current_user.role == "superadmin"
+
+    if not is_owner and not is_superadmin:
+        raise HTTPException(status_code=403, detail="Sin permiso.")
+
+    if is_owner and not is_superadmin:
+        if current_user.work_area_id != payload.area_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo puedes asignar el proyecto a tu propia área.",
+            )
+
+    area = db.get(WorkArea, payload.area_id)
+    if not area:
+        raise HTTPException(status_code=404, detail="Área no encontrada.")
+
+    project = assign_project_area(db, project, payload.area_id, current_user)
+
+    actor_label = current_user.full_name or current_user.email or ""
+    sc = create_status_comment(
+        db,
+        project_id,
+        current_user,
+        f"Proyecto asignado al área '{area.name}' por {actor_label}.",
+    )
+    await ws_manager.broadcast(
+        "comment.created",
+        {
+            "id": sc.id,
+            "project_id": sc.project_id,
+            "author_id": sc.author_id,
+            "author_role": sc.author_role,
+            "author_name": sc.author_name,
+            "message": sc.message,
+            "tipo": sc.tipo,
+            "created_at": sc.created_at.isoformat(),
+        },
+    )
+    await ws_manager.broadcast(
+        "project.area_assigned",
+        {
+            "project_id": project_id,
+            "area_id": payload.area_id,
+            "area_name": area.name,
+        },
+    )
+
+    area_emails = get_area_member_emails(db, payload.area_id)
+    if area_emails:
+        try:
+            asyncio.create_task(
+                send_area_assignment_notification_detached(
+                    project_title=project.title,
+                    project_id=project_id,
+                    area_name=area.name,
+                    assigned_by_name=actor_label,
+                    recipient_emails=area_emails,
+                )
+            )
+        except RuntimeError:
+            logger.warning("[assign-area] No se programó correo (sin event loop)")
+        except Exception:
+            logger.exception("[assign-area] No se programó correo")
+
+    return _read_with_evidence_count(db, project, current_user)
 
 
 # ── Asignación interna al área de Desarrollo (superadmin; no cambia estado del flujo) ──
@@ -642,15 +759,15 @@ async def assign_to_dev(
         except Exception:
             logger.exception("[assign-to-dev] No se programó correo al equipo")
 
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)
 
 
 @router.delete("/{project_id}/assign-to-dev", response_model=ProjectRead)
 async def unassign_from_dev(
     project_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
 ):
     project = clear_development_assignment(db, project_id)
     await ws_manager.broadcast("project.unassigned_dev", {"id": project_id})
-    return _read_with_evidence_count(db, project)
+    return _read_with_evidence_count(db, project, current_user)

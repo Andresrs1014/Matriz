@@ -1,4 +1,5 @@
 // frontend/src/hooks/useProjectActions.ts
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import api from "@/lib/api"
 import { useProjectStore } from "@/store/projectStore"
@@ -11,6 +12,7 @@ import type {
 } from "@/types/project"
 
 export function useProjectActions() {
+  const queryClient = useQueryClient()
   const { setProjects, projects } = useProjectStore()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,10 +123,25 @@ export function useProjectActions() {
     return result ?? []
   }
 
+  const assignArea = useMutation({
+    mutationFn: ({ projectId, areaId }: { projectId: number; areaId: number }) =>
+      api.post<Project>(`/projects/${projectId}/assign-area`, { area_id: areaId }).then((r) => r.data),
+    onSuccess: (_data, { projectId }) => {
+      _updateLocal(_data)
+      void queryClient.invalidateQueries({ queryKey: ["projects"] })
+      window.dispatchEvent(
+        new CustomEvent("matriz:project-data-stale", { detail: { projectId } }),
+      )
+    },
+  })
+
   return {
     loading, error,
     escalar, superaprobar, iniciarEvaluacion,
     marcarEvaluado, proveerSalario, completarROI,
     rechazar, assignToDev, unassignFromDev, getProjectQuestions,
+    assignArea: assignArea.mutateAsync,
+    assignAreaPending: assignArea.isPending,
+    assignAreaError: assignArea.error,
   }
 }

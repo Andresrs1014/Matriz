@@ -166,6 +166,59 @@ async def send_actualizacion_notification_detached(
         logger.error("[email] send_actualizacion_notification_detached: %s", e)
 
 
+async def send_area_assignment_notification_detached(
+    *,
+    project_title: str,
+    project_id: int,
+    area_name: str,
+    assigned_by_name: str,
+    recipient_emails: list[str],
+) -> None:
+    try:
+        with Session(get_engine()) as db:
+            await send_area_assignment_notification(
+                db,
+                project_title=project_title,
+                project_id=project_id,
+                area_name=area_name,
+                assigned_by_name=assigned_by_name,
+                recipient_emails=recipient_emails,
+            )
+    except Exception as e:
+        logger.error("[email] send_area_assignment_notification_detached: %s", e)
+
+
+async def send_area_assignment_notification(
+    db: Session,
+    *,
+    project_title: str,
+    project_id: int,
+    area_name: str,
+    assigned_by_name: str,
+    recipient_emails: list[str],
+) -> None:
+    recipient_emails = _dedupe_email_recipients(recipient_emails)
+    config = get_smtp_config(db)
+    if not config or not recipient_emails:
+        return
+    subject = f"📂 Proyecto asignado a tu área: {project_title}"
+    safe_title = html.escape(project_title, quote=False)
+    safe_area = html.escape(area_name, quote=False)
+    safe_actor = html.escape(assigned_by_name, quote=False)
+    body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <h2 style="color: #E31E24;">Proyecto asignado a {safe_area}</h2>
+        <p>El proyecto <strong>"{safe_title}"</strong> (ID #{project_id})
+        fue asignado a tu área por <strong>{safe_actor}</strong>.</p>
+        <hr style="border-color: #eee;" />
+        <p style="color: #999; font-size: 12px;">Notificación automática — Matriz ZYMO</p>
+    </div>
+    """
+    tasks = [send_email(db, email, subject, body) for email in recipient_emails if email.strip()]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 async def send_dev_assignment_notification_detached(
     *,
     project_title: str,

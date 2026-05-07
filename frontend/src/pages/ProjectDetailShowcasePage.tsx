@@ -31,6 +31,7 @@ import EvaluationWizard from "@/components/evaluation/EvaluationWizard"
 import MatrixMiniPlot from "@/components/matrix/MatrixMiniPlot"
 import ProjectEditModal from "@/components/projects/ProjectEditModal"
 import EvidenceUploader from "@/components/projects/EvidenceUploader"
+import ProjectTasksPanel from "@/components/tasks/ProjectTasksPanel"
 import { useProjectActions } from "@/hooks/useProjectActions"
 import { toast } from "@/store/toastStore"
 
@@ -80,9 +81,13 @@ export default function ProjectDetailShowcasePage() {
   const [evaluating, setEvaluating] = useState(false)
   const [editing, setEditing] = useState(false)
   const [devAssignBusy, setDevAssignBusy] = useState(false)
+  const [catalogAreas, setCatalogAreas] = useState<{ id: number; name: string }[]>([])
+  const [selectedAreaId, setSelectedAreaId] = useState<number | "">("")
+  const [areaBusy, setAreaBusy] = useState(false)
 
   const assignActions = useProjectActions()
   const esUsuario = isUsuario(user)
+  const isSa = isSuperAdmin(user)
   const canSeeROI = canVerROI(user)
   const canEvaluate = isAdmin(user) || isSuperAdmin(user)
 
@@ -110,10 +115,43 @@ export default function ProjectDetailShowcasePage() {
   }, [id, canSeeROI])
 
   useEffect(() => {
-    fetchData()
+    const fn = (e: Event) => {
+      const ce = e as CustomEvent<{ projectId: number }>
+      if (id && ce.detail?.projectId === Number(id)) void fetchData()
+    }
+    window.addEventListener("matriz:project-data-stale", fn)
+    return () => window.removeEventListener("matriz:project-data-stale", fn)
+  }, [id, fetchData])
+
+  useEffect(() => {
+    void fetchData()
   }, [fetchData])
 
-  const isSa = isSuperAdmin(user)
+  useEffect(() => {
+    if (!isSa || !id) return
+    let cancelled = false
+    void api
+      .get<{ id: number; name: string }[]>("/catalog/areas")
+      .then(({ data }) => {
+        if (!cancelled) setCatalogAreas(data)
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogAreas([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isSa, id])
+
+  useEffect(() => {
+    if (!project?.assigned_area_id) {
+      setSelectedAreaId("")
+      return
+    }
+    setSelectedAreaId((prev) =>
+      prev === "" ? project.assigned_area_id ?? "" : prev,
+    )
+  }, [project?.assigned_area_id])
 
   async function handleDevAssignmentToggle() {
     if (!project?.id) return
@@ -132,6 +170,44 @@ export default function ProjectDetailShowcasePage() {
       }
     } finally {
       setDevAssignBusy(false)
+    }
+  }
+
+  async function handleAssignMyArea() {
+    if (!project?.id || user?.work_area_id == null) return
+    setAreaBusy(true)
+    try {
+      const updated = await assignActions.assignArea({
+        projectId: project.id,
+        areaId: user.work_area_id,
+      })
+      if (updated) {
+        setProject(updated)
+        toast.success("Proyecto asignado a tu área.")
+      }
+    } catch {
+      toast.error("No se pudo asignar el área.")
+    } finally {
+      setAreaBusy(false)
+    }
+  }
+
+  async function handleAssignAreaSuper() {
+    if (!project?.id || selectedAreaId === "") return
+    setAreaBusy(true)
+    try {
+      const updated = await assignActions.assignArea({
+        projectId: project.id,
+        areaId: Number(selectedAreaId),
+      })
+      if (updated) {
+        setProject(updated)
+        toast.success("Área del proyecto actualizada.")
+      }
+    } catch {
+      toast.error("No se pudo asignar el área.")
+    } finally {
+      setAreaBusy(false)
     }
   }
 
@@ -155,6 +231,9 @@ export default function ProjectDetailShowcasePage() {
   }
 
   if (!project) return null
+
+  const ownerIsUser = user?.id === project.owner_id
+  const canModifyTasks = project.viewer_can_modify_tasks === true
 
   const latestEval = evaluations[0] ?? null
   const latestConfig = latestEval ? QUADRANT_CONFIG[latestEval.quadrant as QuadrantKey] : null
@@ -213,6 +292,11 @@ export default function ProjectDetailShowcasePage() {
                           Área de Desarrollo
                         </span>
                       )}
+                      {project.assigned_area_name && (
+                        <span className="inline-flex items-center rounded-full border border-teal-500/35 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-200">
+                          Área funcional: {project.assigned_area_name}
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -228,6 +312,48 @@ export default function ProjectDetailShowcasePage() {
                   </div>
 
                   <div className="flex gap-2 flex-wrap">
+                    {isSa && catalogAreas.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-teal-500/25 bg-teal-500/5 px-3 py-2">
+                        <select
+                          value={selectedAreaId}
+                          onChange={(e) =>
+                            setSelectedAreaId(e.target.value === "" ? "" : Number(e.target.value))
+                          }
+                          className="max-w-[200px] rounded-lg border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
+                        >
+                          <option value="">Área…</option>
+                          {catalogAreas.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => void handleAssignAreaSuper()}
+                          disabled={areaBusy || selectedAreaId === "" || assignActions.assignAreaPending}
+                          className="rounded-lg border border-teal-500/40 bg-teal-500/15 px-3 py-1.5 text-xs font-medium text-teal-100 hover:bg-teal-500/25 disabled:opacity-50"
+                        >
+                          {areaBusy || assignActions.assignAreaPending ? "…" : "Asignar área"}
+                        </button>
+                      </div>
+                    )}
+                    {!isSa &&
+                      ownerIsUser &&
+                      user?.work_area_id != null &&
+                      project.assigned_area_id !== user.work_area_id && (
+                        <button
+                          type="button"
+                          onClick={() => void handleAssignMyArea()}
+                          disabled={areaBusy || assignActions.assignAreaPending}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-500/35 bg-teal-500/10 px-4 py-3 text-sm font-medium text-teal-100 transition-all hover:bg-teal-500/20 disabled:opacity-50"
+                        >
+                          {areaBusy || assignActions.assignAreaPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : null}
+                          Asignar a mi área
+                        </button>
+                      )}
                     {isSa && (
                       <button
                         type="button"
@@ -351,6 +477,8 @@ export default function ProjectDetailShowcasePage() {
                 canDelete={(ev) => canDeleteEvidence(user, ev.uploaded_by)}
               />
             )}
+
+            <ProjectTasksPanel projectId={project.id} canModify={canModifyTasks} />
 
             <section className="space-y-5">
               <div className="space-y-1">

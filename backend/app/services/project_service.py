@@ -222,3 +222,25 @@ def clear_development_assignment(db: Session, project_id: int) -> Project:
     db.commit()
     db.refresh(project)
     return project
+
+
+def assign_area(db: Session, project: Project, area_id: int, assigned_by: User) -> Project:
+    """Asigna el proyecto a un área funcional (catálogo WorkArea)."""
+    project.assigned_area_id = area_id
+    project.assigned_area_at = datetime.now(timezone.utc)
+    project.assigned_area_by = assigned_by.id
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def get_area_member_emails(db: Session, area_id: int) -> list[str]:
+    users = db.exec(
+        select(User).where(
+            User.work_area_id == area_id,
+            User.is_active == True,  # noqa: E712
+        )
+    ).all()
+    return [u.email for u in users if u.email]

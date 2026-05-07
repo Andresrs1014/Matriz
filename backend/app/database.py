@@ -112,6 +112,14 @@ def run_migrations() -> None:
             )
             WHERE user.work_area_id IS NULL
               AND user.area IS NOT NULL AND trim(user.area) != ''"""),
+
+        # ── Asignación por área (tareas + catálogo) ────────────────────────────
+        ("project.assigned_area_id",
+         "ALTER TABLE project ADD COLUMN assigned_area_id INTEGER REFERENCES workarea(id)"),
+        ("project.assigned_area_at",
+         "ALTER TABLE project ADD COLUMN assigned_area_at DATETIME"),
+        ("project.assigned_area_by",
+         "ALTER TABLE project ADD COLUMN assigned_area_by INTEGER"),
     ]
 
     with engine.connect() as conn:

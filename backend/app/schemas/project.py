@@ -40,9 +40,14 @@ class ProjectRead(BaseModel):
     assigned_to_dev: bool = False
     assigned_to_dev_at: datetime | None = None
     assigned_to_dev_by: int | None = None
+    assigned_area_id: int | None = None
+    assigned_area_at: datetime | None = None
+    assigned_area_by: int | None = None
+    assigned_area_name: str | None = None
     created_at: datetime
     updated_at: datetime
     evidence_count: int = 0
+    viewer_can_modify_tasks: bool = False
     model_config = {"from_attributes": True}
 
 class AprobacionFinalInput(BaseModel):
@@ -87,6 +92,11 @@ class ProjectEditInput(BaseModel):
     measurement_methods: str | None = None
     okr_creator: str | None = None
     collaborators: list[str] | None = None
+
+
+class AssignAreaInput(BaseModel):
+    area_id: int
+
 
 class ProjectQuestionRead(BaseModel):
     id: int

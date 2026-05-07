@@ -9,6 +9,7 @@ from app.models.draft import ProjectDraft
 from app.models.evidence import ProjectEvidence
 from app.models.dev_team import DevTeamMember
 from app.models.smtp_config import SMTPConfig
+from app.models.task import ProjectTask, TaskChecklist
 from app.models.work_catalog import WorkArea, WorkSite
 
 __all__ = [
@@ -27,4 +28,6 @@ __all__ = [
     "SMTPConfig",
     "WorkArea",
     "WorkSite",
+    "ProjectTask",
+    "TaskChecklist",
 ]

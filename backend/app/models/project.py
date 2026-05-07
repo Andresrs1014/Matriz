@@ -43,6 +43,14 @@ class Project(SQLModel, table=True):
         foreign_key="user.id",
     )
 
+    assigned_area_id: Optional[int] = Field(
+        default=None, nullable=True, foreign_key="workarea.id"
+    )
+    assigned_area_at: Optional[datetime] = Field(default=None, nullable=True)
+    assigned_area_by: Optional[int] = Field(
+        default=None, nullable=True, foreign_key="user.id"
+    )
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         nullable=False,

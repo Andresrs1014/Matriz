@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useProjectStore } from "@/store/projectStore"
 import { useProjects } from "@/hooks/useProjects"
 import { toast } from "@/store/toastStore"
@@ -10,6 +11,12 @@ import type { Comment } from "@/types/comment"
 import type { Evidence } from "@/types/evidence"
 
 export function useWebSocket() {
+  const queryClient = useQueryClient()
+  const queryClientRef = useRef(queryClient)
+  useEffect(() => {
+    queryClientRef.current = queryClient
+  }, [queryClient])
+
   const wsRef             = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { setWsConnected } = useProjectStore()
@@ -106,6 +113,39 @@ export function useWebSocket() {
               }
               break
             }
+            case "project.progress_updated": {
+              const d = msg.data as {
+                project_id: number
+                total_tasks: number
+                completed_tasks: number
+                progress_pct: number
+              }
+              if (d?.project_id != null) {
+                queryClientRef.current.setQueryData(["progress", d.project_id], d)
+              }
+              break
+            }
+            case "task.created":
+            case "task.updated":
+            case "task.deleted":
+            case "checklist.updated": {
+              const pid = (msg.data as { project_id?: number })?.project_id
+              if (pid != null) {
+                void queryClientRef.current.invalidateQueries({ queryKey: ["tasks", pid] })
+                void queryClientRef.current.invalidateQueries({ queryKey: ["progress", pid] })
+              }
+              break
+            }
+            case "project.area_assigned": {
+              const pid = (msg.data as { project_id?: number })?.project_id
+              if (pid != null) {
+                void queryClientRef.current.invalidateQueries({ queryKey: ["projects"] })
+                window.dispatchEvent(
+                  new CustomEvent("matriz:project-data-stale", { detail: { projectId: pid } }),
+                )
+              }
+              break
+            }
             default:
               break
           }
@@ -141,5 +181,5 @@ export function useWebSocket() {
         wsRef.current = null
       }
     }
-  }, [setWsConnected]) // fetchProjects se accede vía ref — no necesita estar aquí
+  }, [setWsConnected])
 }

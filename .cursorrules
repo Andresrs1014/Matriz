@@ -30,3 +30,13 @@
 
 ## Documento maestro del proyecto
 - Respetar además `.rules.md` en la raíz del repo cuando haya discrepancia menor.
+
+## Nuevos patrones (plan tareas + áreas)
+- Modelo ProjectTask: backend/app/models/task.py
+- Modelo TaskChecklist: mismo archivo que ProjectTask
+- Service de tareas: backend/app/services/task_service.py
+- Route de tareas: backend/app/routes/tasks.py
+- Progreso se calcula SIEMPRE en task_service, nunca en routes ni frontend
+- WebSocket events nuevos: task.created, task.updated, task.deleted,
+  checklist.updated, project.progress_updated, project.area_assigned
+- assigned_area_id en Project es FK a WorkArea — coexiste con assigned_to_dev

@@ -25,10 +25,16 @@ export interface Project {
   assigned_to_dev: boolean
   assigned_to_dev_at: string | null
   assigned_to_dev_by: number | null
+  assigned_area_id: number | null
+  assigned_area_at: string | null
+  assigned_area_by: number | null
+  assigned_area_name: string | null
   created_at: string
   updated_at: string
   /** Conteo de evidencias activas; ausente se trata como 0 */
   evidence_count?: number
+  /** Calculado en backend: owner o equipo dev si assigned_to_dev */
+  viewer_can_modify_tasks?: boolean
 }
 
 export interface ProjectCreate {

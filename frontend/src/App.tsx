@@ -1,6 +1,7 @@
 // frontend/src/App.tsx
 import React, { Suspense, useEffect, useRef } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useAuthStore } from "@/store/authStore"
 import { canAccessSettings, isUsuario, type Role } from "@/lib/roles"
 import AppLayout from "@/components/layout/AppLayout"
@@ -73,11 +74,18 @@ function RequireRole({ children, roles }: { children: React.ReactNode; roles: Ro
   return <>{children}</>
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+  },
+})
+
 export default function App() {
   const user = useAuthStore((s) => s.user)
   const userIsUsuario = isUsuario(user)
   useSSOToken()
   return (
+    <QueryClientProvider client={queryClient}>
     <SSOHandler>
     <Suspense fallback={<Spinner />}>
       <Routes>
@@ -122,5 +130,6 @@ export default function App() {
       </Routes>
     </Suspense>
     </SSOHandler>
+    </QueryClientProvider>
   )
 }

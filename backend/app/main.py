@@ -23,6 +23,7 @@ from app.routes.evidence import router as evidence_router
 from app.routes.dev_team import router as dev_team_router
 from app.routes.smtp_config import router as smtp_config_router
 from app.routes.catalog import router as catalog_router
+from app.routes.tasks import router as tasks_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,6 +59,7 @@ app.include_router(evidence_router)
 app.include_router(dev_team_router)
 app.include_router(smtp_config_router)
 app.include_router(catalog_router)
+app.include_router(tasks_router)
 
 
 @app.websocket("/ws")
