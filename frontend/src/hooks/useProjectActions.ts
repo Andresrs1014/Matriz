@@ -7,6 +7,7 @@ import type {
   SuperaprobacionPayload,
   SalarioPayload,
   DatosOperacionalesPayload,
+  DueDateExtendPayload,
   Project,
   ProjectQuestion,
 } from "@/types/project"
@@ -135,6 +136,15 @@ export function useProjectActions() {
     },
   })
 
+  // Extender fecha de vencimiento (propietario del proyecto)
+  async function extenderFecha(projectId: number, payload: DueDateExtendPayload) {
+    return exec(async () => {
+      const { data } = await api.patch<Project>(`/projects/${projectId}/extender-fecha`, payload)
+      _updateLocal(data)
+      return data
+    })
+  }
+
   return {
     loading, error,
     escalar, superaprobar, iniciarEvaluacion,
@@ -143,5 +153,6 @@ export function useProjectActions() {
     assignArea: assignArea.mutateAsync,
     assignAreaPending: assignArea.isPending,
     assignAreaError: assignArea.error,
+    extenderFecha,
   }
 }
