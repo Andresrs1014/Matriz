@@ -9,7 +9,7 @@ from sqlmodel import Session
 from app.core.dependencies import get_current_user, get_db
 from app.core.ws_manager import ws_manager
 from app.models.project import Project
-from app.models.task import TaskChecklist
+from app.models.task import ProjectTask, TaskChecklist
 from app.models.user import User
 from app.schemas.task import (
     ChecklistItemCreate,
@@ -55,6 +55,18 @@ def _schedule_broadcast_progress(project_id: int, db: Session) -> None:
     )
 
 
+def _task_read(db: Session, task: ProjectTask) -> TaskRead:
+    assert task.id is not None
+    items = svc.get_task_checklists(db, task.id)
+    return svc.task_to_read(task, items)
+
+
+def _task_ws_dict(db: Session, task: ProjectTask) -> dict:
+    assert task.id is not None
+    items = svc.get_task_checklists(db, task.id)
+    return svc.task_to_dict(task, items)
+
+
 @router.get("", response_model=list[TaskRead])
 def list_tasks(
     project_id: int,
@@ -62,7 +74,7 @@ def list_tasks(
     _: User = Depends(get_current_user),
 ):
     _get_project_or_404(project_id, db)
-    return [svc.task_to_read(t) for t in svc.list_tasks(db, project_id)]
+    return [svc.task_to_read(t, items) for t, items in svc.list_task_rows(db, project_id)]
 
 
 @router.get("/progress", response_model=ProjectProgress)
@@ -85,9 +97,9 @@ async def create_task(
     project = _get_project_or_404(project_id, db)
     _require_can_modify(project, current_user, db)
     task = svc.create_task(db, project_id, current_user, payload)
-    await ws_manager.broadcast("task.created", svc.task_to_dict(task))
+    await ws_manager.broadcast("task.created", _task_ws_dict(db, task))
     _schedule_broadcast_progress(project_id, db)
-    return svc.task_to_read(task)
+    return _task_read(db, task)
 
 
 @router.patch("/{task_id}", response_model=TaskRead)
@@ -104,9 +116,9 @@ async def update_task(
     if not task or task.project_id != project_id:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
     task = svc.update_task(db, task, payload, current_user)
-    await ws_manager.broadcast("task.updated", svc.task_to_dict(task))
+    await ws_manager.broadcast("task.updated", _task_ws_dict(db, task))
     _schedule_broadcast_progress(project_id, db)
-    return svc.task_to_read(task)
+    return _task_read(db, task)
 
 
 @router.post("/{task_id}/complete", response_model=TaskRead)
@@ -122,9 +134,9 @@ async def complete_task(
     if not task or task.project_id != project_id:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
     task = svc.complete_task(db, task, current_user)
-    await ws_manager.broadcast("task.updated", svc.task_to_dict(task))
+    await ws_manager.broadcast("task.updated", _task_ws_dict(db, task))
     _schedule_broadcast_progress(project_id, db)
-    return svc.task_to_read(task)
+    return _task_read(db, task)
 
 
 @router.post("/{task_id}/reopen", response_model=TaskRead)
@@ -140,9 +152,9 @@ async def reopen_task(
     if not task or task.project_id != project_id:
         raise HTTPException(status_code=404, detail="Tarea no encontrada.")
     task = svc.reopen_task(db, task)
-    await ws_manager.broadcast("task.updated", svc.task_to_dict(task))
+    await ws_manager.broadcast("task.updated", _task_ws_dict(db, task))
     _schedule_broadcast_progress(project_id, db)
-    return svc.task_to_read(task)
+    return _task_read(db, task)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -188,7 +200,7 @@ async def add_checklist(
     await ws_manager.broadcast(
         "checklist.updated", {"task_id": task_id, "project_id": project_id}
     )
-    await ws_manager.broadcast("task.updated", svc.task_to_dict(task))
+    await ws_manager.broadcast("task.updated", _task_ws_dict(db, task))
     _schedule_broadcast_progress(project_id, db)
     return ChecklistItemRead.model_validate(item)
 
@@ -217,7 +229,7 @@ async def update_checklist(
     await ws_manager.broadcast(
         "checklist.updated", {"task_id": task_id, "project_id": project_id}
     )
-    await ws_manager.broadcast("task.updated", svc.task_to_dict(task))
+    await ws_manager.broadcast("task.updated", _task_ws_dict(db, task))
     _schedule_broadcast_progress(project_id, db)
     return ChecklistItemRead.model_validate(item)
 
@@ -242,7 +254,7 @@ async def delete_checklist(
     task = svc.get_task(db, task_id)
     if task:
         task = svc.sync_task_status_with_checklist(db, task, current_user)
-        await ws_manager.broadcast("task.updated", svc.task_to_dict(task))
+        await ws_manager.broadcast("task.updated", _task_ws_dict(db, task))
     await ws_manager.broadcast(
         "checklist.updated", {"task_id": task_id, "project_id": project_id}
     )

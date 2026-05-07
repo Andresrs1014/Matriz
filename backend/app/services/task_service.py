@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.models.dev_team import DevTeamMember
@@ -45,13 +44,53 @@ def _task_rows_done(task: ProjectTask, items: list[TaskChecklist]) -> bool:
     return False
 
 
-def calculate_progress(db: Session, project_id: int) -> ProjectProgress:
-    stmt = (
-        select(ProjectTask)
-        .where(ProjectTask.project_id == project_id)
-        .options(selectinload(ProjectTask.checklist_items))
+def checklists_for_task_ids(
+    db: Session, task_ids: list[int]
+) -> dict[int, list[TaskChecklist]]:
+    if not task_ids:
+        return {}
+    rows = list(
+        db.exec(
+            select(TaskChecklist)
+            .where(TaskChecklist.task_id.in_(task_ids))
+            .order_by(TaskChecklist.task_id, TaskChecklist.sort_order, TaskChecklist.id)
+        ).all()
     )
-    tasks = list(db.exec(stmt).all())
+    out: dict[int, list[TaskChecklist]] = {}
+    for r in rows:
+        out.setdefault(r.task_id, []).append(r)
+    return out
+
+
+def list_task_rows(
+    db: Session, project_id: int
+) -> list[tuple[ProjectTask, list[TaskChecklist]]]:
+    tasks = list(
+        db.exec(
+            select(ProjectTask)
+            .where(ProjectTask.project_id == project_id)
+            .order_by(ProjectTask.sort_order, ProjectTask.created_at)
+        ).all()
+    )
+    ids = [t.id for t in tasks if t.id is not None]
+    by_task = checklists_for_task_ids(db, ids)
+    return [(t, by_task.get(t.id or -1, [])) for t in tasks]
+
+
+def get_task_checklists(db: Session, task_id: int) -> list[TaskChecklist]:
+    return list(
+        db.exec(
+            select(TaskChecklist)
+            .where(TaskChecklist.task_id == task_id)
+            .order_by(TaskChecklist.sort_order, TaskChecklist.id)
+        ).all()
+    )
+
+
+def calculate_progress(db: Session, project_id: int) -> ProjectProgress:
+    tasks = list(
+        db.exec(select(ProjectTask).where(ProjectTask.project_id == project_id)).all()
+    )
     total = len(tasks)
     if total == 0:
         return ProjectProgress(
@@ -60,8 +99,10 @@ def calculate_progress(db: Session, project_id: int) -> ProjectProgress:
             completed_tasks=0,
             progress_pct=0.0,
         )
+    ids = [t.id for t in tasks if t.id is not None]
+    by_task = checklists_for_task_ids(db, ids)
     completed = sum(
-        1 for t in tasks if _task_rows_done(t, list(t.checklist_items or []))
+        1 for t in tasks if _task_rows_done(t, by_task.get(t.id or -1, []))
     )
     pct = round((completed / total) * 100, 1)
     return ProjectProgress(
@@ -72,27 +113,11 @@ def calculate_progress(db: Session, project_id: int) -> ProjectProgress:
     )
 
 
-def list_tasks(db: Session, project_id: int) -> list[ProjectTask]:
-    return list(
-        db.exec(
-            select(ProjectTask)
-            .where(ProjectTask.project_id == project_id)
-            .options(selectinload(ProjectTask.checklist_items))
-            .order_by(ProjectTask.sort_order, ProjectTask.created_at)
-        ).all()
-    )
-
-
 def get_task(db: Session, task_id: int) -> ProjectTask | None:
-    return db.exec(
-        select(ProjectTask)
-        .where(ProjectTask.id == task_id)
-        .options(selectinload(ProjectTask.checklist_items))
-    ).first()
+    return db.get(ProjectTask, task_id)
 
 
-def task_to_read(task: ProjectTask) -> TaskRead:
-    items = list(task.checklist_items or [])
+def task_to_read(task: ProjectTask, items: list[TaskChecklist]) -> TaskRead:
     return TaskRead(
         id=task.id,  # type: ignore[arg-type]
         project_id=task.project_id,
@@ -127,16 +152,17 @@ def create_task(db: Session, project_id: int, user: User, payload: TaskCreate) -
     db.add(task)
     db.commit()
     db.refresh(task)
-
+    assert task.id is not None
     for i, item in enumerate(payload.checklist_items):
         ci = TaskChecklist(
-            task_id=task.id,  # type: ignore[arg-type]
+            task_id=task.id,
             text=item.text,
             sort_order=item.sort_order if item.sort_order else i,
         )
         db.add(ci)
     db.commit()
-    return get_task(db, task.id)  # type: ignore[arg-type]
+    db.refresh(task)
+    return task
 
 
 def update_task(db: Session, task: ProjectTask, payload: TaskUpdate, actor: User) -> ProjectTask:
@@ -155,9 +181,8 @@ def update_task(db: Session, task: ProjectTask, payload: TaskUpdate, actor: User
     task.updated_at = datetime.now(timezone.utc)
     db.add(task)
     db.commit()
-    refreshed = get_task(db, task.id)  # type: ignore[arg-type]
-    assert refreshed is not None
-    return refreshed
+    db.refresh(task)
+    return task
 
 
 def complete_task(db: Session, task: ProjectTask, user: User) -> ProjectTask:
@@ -167,9 +192,8 @@ def complete_task(db: Session, task: ProjectTask, user: User) -> ProjectTask:
     task.updated_at = datetime.now(timezone.utc)
     db.add(task)
     db.commit()
-    out = get_task(db, task.id)  # type: ignore[arg-type]
-    assert out is not None
-    return out
+    db.refresh(task)
+    return task
 
 
 def reopen_task(db: Session, task: ProjectTask) -> ProjectTask:
@@ -179,12 +203,12 @@ def reopen_task(db: Session, task: ProjectTask) -> ProjectTask:
     task.updated_at = datetime.now(timezone.utc)
     db.add(task)
     db.commit()
-    out = get_task(db, task.id)  # type: ignore[arg-type]
-    assert out is not None
-    return out
+    db.refresh(task)
+    return task
 
 
 def delete_task(db: Session, task: ProjectTask) -> None:
+    assert task.id is not None
     items = db.exec(
         select(TaskChecklist).where(TaskChecklist.task_id == task.id)
     ).all()
@@ -224,15 +248,15 @@ def delete_checklist_item(db: Session, item: TaskChecklist) -> None:
 def sync_task_status_with_checklist(
     db: Session, task: ProjectTask, acting_user: User
 ) -> ProjectTask:
+    assert task.id is not None
     items = list(
         db.exec(
             select(TaskChecklist).where(TaskChecklist.task_id == task.id)
         ).all()
     )
     if not items:
-        refreshed = get_task(db, task.id)  # type: ignore[arg-type]
-        assert refreshed is not None
-        return refreshed
+        db.refresh(task)
+        return task
     all_done = all(i.is_done for i in items)
     if all_done:
         if task.status != "completada":
@@ -247,13 +271,11 @@ def sync_task_status_with_checklist(
     task.updated_at = datetime.now(timezone.utc)
     db.add(task)
     db.commit()
-    out = get_task(db, task.id)  # type: ignore[arg-type]
-    assert out is not None
-    return out
+    db.refresh(task)
+    return task
 
 
-def task_to_dict(task: ProjectTask) -> dict:
-    items = list(task.checklist_items or [])
+def task_to_dict(task: ProjectTask, items: list[TaskChecklist]) -> dict:
     return {
         "id": task.id,
         "project_id": task.project_id,

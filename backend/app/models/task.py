@@ -1,27 +1,12 @@
 # backend/app/models/task.py
+"""Tareas y checklist: solo columnas y FKs, sin Relationship (compat. SQLAlchemy 2 + SQLModel)."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
-from sqlmodel import Field, Relationship, SQLModel
-
-
-class TaskChecklist(SQLModel, table=True):
-    """Ítem de subtarea dentro de una tarea."""
-
-    __tablename__ = "taskchecklist"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    task_id: int = Field(foreign_key="projecttask.id", nullable=False, index=True)
-    text: str = Field(max_length=500, nullable=False)
-    is_done: bool = Field(default=False, nullable=False)
-    sort_order: int = Field(default=0, nullable=False)
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), nullable=False
-    )
-
-    task: Optional["ProjectTask"] = Relationship(back_populates="checklist_items")
+from sqlmodel import Field, SQLModel
 
 
 class ProjectTask(SQLModel, table=True):
@@ -58,7 +43,17 @@ class ProjectTask(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    checklist_items: List[TaskChecklist] = Relationship(
-        back_populates="task",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+
+class TaskChecklist(SQLModel, table=True):
+    """Ítem de subtarea dentro de una tarea."""
+
+    __tablename__ = "taskchecklist"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: int = Field(foreign_key="projecttask.id", nullable=False, index=True)
+    text: str = Field(max_length=500, nullable=False)
+    is_done: bool = Field(default=False, nullable=False)
+    sort_order: int = Field(default=0, nullable=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc), nullable=False
     )
