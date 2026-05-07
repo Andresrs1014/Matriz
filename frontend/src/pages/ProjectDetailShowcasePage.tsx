@@ -22,7 +22,7 @@ import {
 import api from "@/lib/api"
 import { QUADRANT_CONFIG, type QuadrantKey } from "@/lib/constants"
 import { cn } from "@/lib/utils"
-import { canVerROI, isAdmin, isSuperAdmin, isUsuario, canUploadEvidence, canDeleteEvidence } from "@/lib/roles"
+import { canVerROI, isAdmin, isSuperAdmin, isUsuario, isCoordinador, canUploadEvidence, canDeleteEvidence } from "@/lib/roles"
 import { useAuthStore } from "@/store/authStore"
 import type { Project } from "@/types/project"
 import { ROI_QUADRANT_CONFIG, type ROICuadranteKey, type ROIRead } from "@/types/roi"
@@ -90,6 +90,10 @@ export default function ProjectDetailShowcasePage() {
   const isSa = isSuperAdmin(user)
   const canSeeROI = canVerROI(user)
   const canEvaluate = isAdmin(user) || isSuperAdmin(user)
+  // Usuario/coordinador pueden extender fecha de sus propios proyectos
+  const canExtendDate = canEvaluate || !!(
+    user && project && user.id === project.owner_id && (isUsuario(user) || isCoordinador(user))
+  )
 
   const fetchData = useCallback(async () => {
     if (!id) return
@@ -419,8 +423,10 @@ export default function ProjectDetailShowcasePage() {
                     <InfoTileDueDate
                       dueDate={project.due_date}
                       projectId={project.id}
-                      canEdit={canEvaluate}
+                      canEdit={canExtendDate}
+                      needsJustification={!canEvaluate}
                       onUpdated={fetchData}
+                      onExtendDate={assignActions.extenderFecha}
                     />
                   )}
                   {project.okr_productive !== null && project.okr_productive !== undefined && (
@@ -697,17 +703,24 @@ function InfoTileDueDate({
   dueDate,
   projectId,
   canEdit,
+  needsJustification,
   onUpdated,
+  onExtendDate,
 }: {
   dueDate: string
   projectId: number
   canEdit: boolean
+  needsJustification: boolean
   onUpdated: () => void
+  onExtendDate: (projectId: number, payload: { due_date: string; justificacion: string }) => Promise<unknown>
 }) {
   const date = new Date(dueDate)
   const isExpired = date < new Date()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showJustificationModal, setShowJustificationModal] = useState(false)
+  const [justification, setJustification] = useState("")
+  const [justificationError, setJustificationError] = useState("")
   // input value en formato YYYY-MM-DD
   const [inputVal, setInputVal] = useState(
     date.toISOString().slice(0, 10)
@@ -720,65 +733,161 @@ function InfoTileDueDate({
 
   async function handleSave() {
     if (!inputVal) return
-    setSaving(true)
-    try {
-      await api.patch(`/projects/${projectId}/due-date`, { due_date: inputVal })
-      onUpdated()
-      setEditing(false)
-    } finally {
-      setSaving(false)
+    
+    if (needsJustification) {
+      // Validar justificación
+      if (!justification.trim() || justification.trim().length < 10) {
+        setJustificationError("La justificación debe tener al menos 10 caracteres")
+        return
+      }
+      setSaving(true)
+      try {
+        await onExtendDate(projectId, {
+          due_date: inputVal,
+          justificacion: justification.trim(),
+        })
+        onUpdated()
+        setEditing(false)
+        setShowJustificationModal(false)
+        setJustification("")
+        setJustificationError("")
+      } finally {
+        setSaving(false)
+      }
+    } else {
+      // Comportamiento original para admin (sin justificación)
+      setSaving(true)
+      try {
+        await api.patch(`/projects/${projectId}/due-date`, { due_date: inputVal })
+        onUpdated()
+        setEditing(false)
+      } finally {
+        setSaving(false)
+      }
+    }
+  }
+
+  function handleEditClick() {
+    if (needsJustification) {
+      setShowJustificationModal(true)
+    } else {
+      setEditing(true)
     }
   }
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-900/45 p-4">
-      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-        <CalendarClock className="h-4 w-4 text-electric" />
-        <span>Fecha de vencimiento</span>
-        {canEdit && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="ml-auto text-slate-600 hover:text-electric transition-colors"
-            title="Cambiar fecha"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
+    <>
+      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/45 p-4">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <CalendarClock className="h-4 w-4 text-electric" />
+          <span>Fecha de vencimiento</span>
+          {canEdit && !editing && (
+            <button
+              onClick={handleEditClick}
+              className="ml-auto text-slate-600 hover:text-electric transition-colors"
+              title="Cambiar fecha"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="date"
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-electric transition-colors"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="text-xs text-electric hover:text-electric-bright disabled:opacity-40 transition-colors font-medium"
+            >
+              {saving ? "..." : "Guardar"}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-slate-200">
+              {date.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })}
+            </p>
+            <p className={cn("mt-0.5 text-xs", isExpired ? "text-red-400" : "text-slate-500")}>
+              {isExpired ? "Plazo vencido" : "En curso"}
+            </p>
+          </>
         )}
       </div>
-      {editing ? (
-        <div className="flex items-center gap-2">
-          <input
-            ref={inputRef}
-            type="date"
-            value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-            className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-electric transition-colors"
-          />
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="text-xs text-electric hover:text-electric-bright disabled:opacity-40 transition-colors font-medium"
-          >
-            {saving ? "..." : "Guardar"}
-          </button>
-          <button
-            onClick={() => setEditing(false)}
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            Cancelar
-          </button>
+
+      {/* Modal de justificación */}
+      {showJustificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-4 text-lg font-semibold text-slate-200">
+              Extender fecha de vencimiento
+            </h3>
+            <div className="mb-4">
+              <label className="mb-2 block text-sm text-slate-400">
+                Nueva fecha
+              </label>
+              <input
+                type="date"
+                value={inputVal}
+                onChange={(e) => setInputVal(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-electric focus:outline-none"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="mb-2 block text-sm text-slate-400">
+                Justificación <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={justification}
+                onChange={(e) => {
+                  setJustification(e.target.value)
+                  setJustificationError("")
+                }}
+                placeholder="Explica por qué necesitas extender la fecha (mínimo 10 caracteres)"
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 focus:border-electric focus:outline-none"
+                rows={3}
+              />
+              {justificationError && (
+                <p className="mt-1 text-xs text-red-400">{justificationError}</p>
+              )}
+              <p className="mt-1 text-xs text-slate-500">
+                {justification.length}/10 caracteres mínimos
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowJustificationModal(false)
+                  setJustification("")
+                  setJustificationError("")
+                }}
+                className="rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-lg bg-electric px-4 py-2 text-sm font-medium text-white hover:bg-electric-bright disabled:opacity-40 transition-colors"
+              >
+                {saving ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
         </div>
-      ) : (
-        <>
-          <p className="text-sm text-slate-200">
-            {date.toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" })}
-          </p>
-          <p className={cn("mt-0.5 text-xs", isExpired ? "text-red-400" : "text-slate-500")}>
-            {isExpired ? "Plazo vencido" : "En curso"}
-          </p>
-        </>
       )}
-    </div>
+    </>
   )
 }
 
