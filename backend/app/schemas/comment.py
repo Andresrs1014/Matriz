@@ -12,6 +12,7 @@ class CommentCreate(BaseModel):
         "feedback",
         "aprobacion",
         "actualizacion",
+        "extension_fecha",
     ] = "comentario"
 
 class CommentRead(BaseModel):

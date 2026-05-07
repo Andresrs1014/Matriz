@@ -82,6 +82,10 @@ class OkrProductiveInput(BaseModel):
 class DueDateInput(BaseModel):
     due_date: str  # YYYY-MM-DD
 
+class DueDateExtendInput(BaseModel):
+    due_date: str  # YYYY-MM-DD
+    justificacion: str  # Obligatoria, mínimo 10 caracteres
+
 class ProjectEditInput(BaseModel):
     title: str | None = None
     okr_objectives: str | None = None
