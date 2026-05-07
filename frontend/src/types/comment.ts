@@ -4,6 +4,7 @@ export type CommentTipo =
   | "feedback"
   | "aprobacion"
   | "actualizacion"
+  | "extension_fecha"
 
 export interface Comment {
   id:          number

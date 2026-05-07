@@ -85,3 +85,9 @@ export interface DatosOperacionalesPayload {
   horas_proceso_nuevo: number
   observacion?: string
 }
+
+// Payload para que usuario/coordinador extienda la fecha de su propio proyecto
+export interface DueDateExtendPayload {
+  due_date: string // YYYY-MM-DD
+  justificacion: string
+}
