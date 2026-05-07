@@ -113,9 +113,10 @@ def create_status_comment(
     project_id: int,
     author: User,
     message: str,
+    tipo: str = "cambio_estado",
 ) -> ProjectComment:
-    """Crea automáticamente un comentario de tipo cambio_estado."""
+    """Crea automáticamente un comentario. Por defecto tipo cambio_estado."""
     return create_comment(db, project_id, author, CommentCreate(
         message=message,
-        tipo="cambio_estado"
+        tipo=tipo
     ))

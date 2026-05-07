@@ -18,7 +18,7 @@ from app.schemas.project import (
     ProjectCreate, ProjectRead,
     SuperaprobacionInput, SalarioInput,
     DatosOperacionalesInput, ProjectQuestionRead,
-    OkrProductiveInput, DueDateInput, ProjectEditInput,
+    OkrProductiveInput, DueDateInput, DueDateExtendInput, ProjectEditInput,
     AssignAreaInput,
 )
 from app.services.project_service import (
@@ -638,6 +638,113 @@ async def actualizar_due_date(
     db.add(project)
     db.commit()
     db.refresh(project)
+    return _read_with_evidence_count(db, project, current_user)
+
+
+# ── Extender fecha de vencimiento (propietario del proyecto) ─────────────────
+@router.patch("/{project_id}/extender-fecha", response_model=ProjectRead)
+async def extender_fecha_proyecto(
+    project_id: int,
+    payload: DueDateExtendInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Usuario o coordinador pueden extender la fecha de sus propios proyectos.
+    Requiere justificación (mínimo 10 caracteres).
+    Crea un comentario de tipo 'extension_fecha' con la justificación.
+    """
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+
+    # Verificar propiedad del proyecto
+    # Usuario: solo puede extender sus propios proyectos
+    # Coordinador: puede extender sus propios proyectos
+    if current_user.role == "usuario" and project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Solo puedes modificar la fecha de tus propios proyectos.")
+
+    if current_user.role == "coordinador" and project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Solo puedes modificar la fecha de tus propios proyectos.")
+
+    # Validar justificación
+    if not payload.justificacion or len(payload.justificacion.strip()) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="La justificación debe tener al menos 10 caracteres."
+        )
+
+    # Guardar fecha anterior para el comentario
+    old_due_date = project.due_date
+
+    # Parsear nueva fecha
+    try:
+        from datetime import date as _date
+        parsed = datetime.combine(
+            _date.fromisoformat(payload.due_date),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD.")
+
+    # Validar que la nueva fecha sea posterior a la actual
+    if project.due_date and parsed <= project.due_date:
+        raise HTTPException(
+            status_code=400,
+            detail="La nueva fecha debe ser posterior a la fecha actual."
+        )
+
+    # Actualizar fecha
+    project.due_date = parsed
+    project.updated_at = datetime.now(timezone.utc)
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+
+    # Crear comentario de tipo extension_fecha
+    from app.schemas.comment import CommentCreate
+    justificacion_texto = payload.justificacion.strip()
+    old_str = old_due_date.strftime("%Y-%m-%d") if old_due_date else "No definida"
+    new_str = parsed.strftime("%Y-%m-%d")
+
+    comment_msg = (
+        f"Fecha de vencimiento extendida de {old_str} a {new_str}. "
+        f"Justificación: {justificacion_texto}"
+    )
+    sc = create_status_comment(
+        db, project_id, current_user,
+        comment_msg,
+        tipo="extension_fecha",
+    )
+
+    # Broadcasts
+    await ws_manager.broadcast("comment.created", {
+        "id": sc.id, "project_id": sc.project_id, "author_id": sc.author_id,
+        "author_role": sc.author_role, "author_name": sc.author_name,
+        "message": sc.message, "tipo": sc.tipo, "created_at": sc.created_at.isoformat(),
+    })
+    await ws_manager.broadcast("project.fecha_extendida", {
+        "id": project_id,
+        "due_date": parsed.isoformat(),
+    })
+
+    # Notificar por email (fire and forget)
+    from app.services.email_service import send_fecha_extendida_notification_detached
+    try:
+        asyncio.create_task(
+            send_fecha_extendida_notification_detached(
+                project_title=project.title,
+                project_id=project_id,
+                old_due_date=old_due_date,
+                new_due_date=parsed,
+                author_name=current_user.full_name or current_user.email,
+                justificacion=justificacion_texto,
+            )
+        )
+    except Exception:
+        pass  # No bloquea la respuesta si falla el email
+
     return _read_with_evidence_count(db, project, current_user)
 
 
