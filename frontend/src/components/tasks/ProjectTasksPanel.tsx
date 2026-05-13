@@ -26,10 +26,13 @@ export default function ProjectTasksPanel({
     return tasks.filter((t) => t.status === filter)
   }, [tasks, filter])
 
-  const { pending, done } = useMemo(() => {
-    const p = filtered.filter((t) => t.status !== "completada")
+  const { active, done, cancelled } = useMemo(() => {
+    const a = filtered.filter(
+      (t) => t.status !== "completada" && t.status !== "cancelada",
+    )
     const d = filtered.filter((t) => t.status === "completada")
-    return { pending: p, done: d }
+    const c = filtered.filter((t) => t.status === "cancelada")
+    return { active: a, done: d, cancelled: c }
   }, [filtered])
 
   const filters: { key: FilterKey; label: string }[] = [
@@ -37,6 +40,7 @@ export default function ProjectTasksPanel({
     { key: "pendiente", label: "Pendientes" },
     { key: "en_progreso", label: "En progreso" },
     { key: "completada", label: "Completadas" },
+    { key: "cancelada", label: "Canceladas" },
   ]
 
   return (
@@ -51,7 +55,7 @@ export default function ProjectTasksPanel({
             Tareas del proyecto
           </h2>
           <p className="text-sm text-slate-400">
-            Progreso del OKR según tareas completadas (no altera el flujo de aprobación).
+            Progreso según tareas completadas; las canceladas no cuentan en el porcentaje.
           </p>
         </div>
       </div>
@@ -108,9 +112,9 @@ export default function ProjectTasksPanel({
 
       {!isLoading && !isError && tasks.length > 0 && (
         <div className="space-y-6">
-          {pending.length > 0 && (
+          {active.length > 0 && (
             <div className="space-y-3">
-              {pending.map((t) => (
+              {active.map((t) => (
                 <TaskCard key={t.id} task={t} projectId={projectId} canModify={canModify} />
               ))}
             </div>
@@ -122,6 +126,18 @@ export default function ProjectTasksPanel({
               </p>
               <div className="space-y-3">
                 {done.map((t) => (
+                  <TaskCard key={t.id} task={t} projectId={projectId} canModify={canModify} />
+                ))}
+              </div>
+            </div>
+          )}
+          {cancelled.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Canceladas
+              </p>
+              <div className="space-y-3">
+                {cancelled.map((t) => (
                   <TaskCard key={t.id} task={t} projectId={projectId} canModify={canModify} />
                 ))}
               </div>

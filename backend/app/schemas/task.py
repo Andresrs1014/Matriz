@@ -5,7 +5,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 Priority = Literal["urgente", "alta", "media", "baja"]
-TaskStatus = Literal["pendiente", "en_progreso", "completada"]
+TaskStatus = Literal["pendiente", "en_progreso", "completada", "cancelada"]
 
 
 class ChecklistItemRead(BaseModel):

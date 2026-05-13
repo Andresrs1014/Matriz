@@ -37,6 +37,8 @@ def can_modify_tasks(db: Session, project: Project, user: User) -> bool:
 
 
 def _task_rows_done(task: ProjectTask, items: list[TaskChecklist]) -> bool:
+    if task.status == "cancelada":
+        return False
     if task.status == "completada":
         return True
     if items and all(i.is_done for i in items):
@@ -91,7 +93,9 @@ def calculate_progress(db: Session, project_id: int) -> ProjectProgress:
     tasks = list(
         db.exec(select(ProjectTask).where(ProjectTask.project_id == project_id)).all()
     )
-    total = len(tasks)
+    # Las canceladas no cuentan en el denominador del OKR.
+    active = [t for t in tasks if t.status != "cancelada"]
+    total = len(active)
     if total == 0:
         return ProjectProgress(
             project_id=project_id,
@@ -99,10 +103,10 @@ def calculate_progress(db: Session, project_id: int) -> ProjectProgress:
             completed_tasks=0,
             progress_pct=0.0,
         )
-    ids = [t.id for t in tasks if t.id is not None]
+    ids = [t.id for t in active if t.id is not None]
     by_task = checklists_for_task_ids(db, ids)
     completed = sum(
-        1 for t in tasks if _task_rows_done(t, by_task.get(t.id or -1, []))
+        1 for t in active if _task_rows_done(t, by_task.get(t.id or -1, []))
     )
     pct = round((completed / total) * 100, 1)
     return ProjectProgress(
@@ -249,6 +253,9 @@ def sync_task_status_with_checklist(
     db: Session, task: ProjectTask, acting_user: User
 ) -> ProjectTask:
     assert task.id is not None
+    if task.status == "cancelada":
+        db.refresh(task)
+        return task
     items = list(
         db.exec(
             select(TaskChecklist).where(TaskChecklist.task_id == task.id)

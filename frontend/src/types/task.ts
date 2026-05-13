@@ -1,5 +1,5 @@
 export type TaskPriority = "urgente" | "alta" | "media" | "baja"
-export type TaskStatus = "pendiente" | "en_progreso" | "completada"
+export type TaskStatus = "pendiente" | "en_progreso" | "completada" | "cancelada"
 
 export interface ChecklistItem {
   id: number
