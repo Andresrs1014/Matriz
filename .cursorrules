@@ -40,3 +40,4 @@
 - WebSocket events nuevos: task.created, task.updated, task.deleted,
   checklist.updated, project.progress_updated, project.area_assigned
 - assigned_area_id en Project es FK a WorkArea — coexiste con assigned_to_dev
+- Tareas: superadmin puede crear/editar en cualquier proyecto; otros roles solo en proyectos donde son owner_id; dev team cuando assigned_to_dev

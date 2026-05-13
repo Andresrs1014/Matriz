@@ -21,10 +21,10 @@ from app.schemas.task import (
 
 
 def can_modify_tasks(db: Session, project: Project, user: User) -> bool:
-    """Owner o miembro del equipo de desarrollo si el proyecto está asignado a dev.
-    admin, superadmin y coordinador: solo lectura (sin modificar tareas)."""
-    if user.role in ("admin", "superadmin", "coordinador"):
-        return False
+    """Superadmin en cualquier proyecto; el resto de roles solo en proyectos propios (owner_id).
+    Además: miembros del equipo de desarrollo cuando el proyecto está asignado a dev."""
+    if user.role == "superadmin":
+        return True
     if project.owner_id == user.id:
         return True
     if project.assigned_to_dev:

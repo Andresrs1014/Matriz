@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ClipboardList } from "lucide-react"
+import { ClipboardList, Info } from "lucide-react"
 
 import OKRProgressBar from "@/components/tasks/OKRProgressBar"
 import TaskCard from "@/components/tasks/TaskCard"
@@ -57,6 +57,21 @@ export default function ProjectTasksPanel({
       </div>
 
       <OKRProgressBar progress={progress} />
+
+      {!canModify && (
+        <div
+          className="flex gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 text-sm text-slate-400"
+          role="status"
+        >
+          <Info className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+          <p>
+            En este expediente las tareas son de solo lectura para ti. Pueden crearlas o editarlas el{" "}
+            <span className="text-slate-300">dueño del OKR</span>, un{" "}
+            <span className="text-slate-300">superadmin</span> (en cualquier proyecto) o el{" "}
+            <span className="text-slate-300">equipo de desarrollo</span> cuando el proyecto está asignado a esa área.
+          </p>
+        </div>
+      )}
 
       <TaskCreateForm projectId={projectId} canModify={canModify} />
 
