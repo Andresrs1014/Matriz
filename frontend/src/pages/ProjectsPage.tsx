@@ -1,5 +1,5 @@
 // frontend/src/pages/ProjectsPage.tsx
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -8,12 +8,14 @@ import {
   ArrowUpCircle, CheckCircle2, PlayCircle, BadgeCheck,
   XCircle, ThumbsUp, ThumbsDown, Pencil,
   Paperclip,
+  Building2,
 } from "lucide-react"
 import { useProjects } from "@/hooks/useProjects"
 import { useProjectActions } from "@/hooks/useProjectActions"
 import { useAuthStore } from "@/store/authStore"
 import {
   isAdmin,
+  isSuperAdmin,
   canEscalar, canSuperaprobar, canIniciarEvaluacion,
   canMarcarEvaluado, canProveerSalario, canCompletarROI,
   canCorregirSalario, canRechazar,
@@ -24,6 +26,7 @@ import SuperadminSalaryModal from "@/components/projects/SuperadminSalaryModal"
 import AdminROIForm from "@/components/projects/AdminROIForm"
 import ProjectSubmitForm from "@/components/projects/ProjectSubmitForm"
 import ProjectEditModal from "@/components/projects/ProjectEditModal"
+import api from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { Project } from "@/types/project"
 
@@ -43,6 +46,11 @@ const FLOW_TOTAL = 8
 
 type ModalType = "superaprobar" | "salario" | "roi" | "matrix" | "edit" | null
 
+type CatalogArea = { id: number; name: string; sort_order: number }
+
+const AREA_FILTER_ALL = ""
+const AREA_FILTER_NONE = "__none__"
+
 export default function ProjectsPage() {
   const { projects, loading, deleteProject, fetchProjects } = useProjects()
   const { escalar, iniciarEvaluacion, rechazar } = useProjectActions()
@@ -50,6 +58,8 @@ export default function ProjectsPage() {
   const navigate = useNavigate()
 
   const [search, setSearch] = useState("")
+  const [areaFilter, setAreaFilter] = useState<string>(AREA_FILTER_ALL)
+  const [catalogAreas, setCatalogAreas] = useState<CatalogArea[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [markingProductivity, setMarkingProductivity] = useState<number | null>(null)
 
@@ -68,9 +78,37 @@ export default function ProjectsPage() {
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [modal, setModal] = useState<ModalType>(null)
 
-  const filtered = projects.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase())
-  )
+  useEffect(() => {
+    if (!isSuperAdmin(user)) return
+    let cancelled = false
+    api
+      .get<CatalogArea[]>("/catalog/areas")
+      .then((res) => {
+        if (!cancelled) setCatalogAreas(res.data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogAreas([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return projects.filter((p) => {
+      if (q && !p.title.toLowerCase().includes(q)) return false
+      if (isSuperAdmin(user) && areaFilter !== AREA_FILTER_ALL) {
+        if (areaFilter === AREA_FILTER_NONE) {
+          if (p.owner_work_area_id != null) return false
+        } else {
+          const idNum = Number(areaFilter)
+          if (Number(p.owner_work_area_id) !== idNum) return false
+        }
+      }
+      return true
+    })
+  }, [projects, search, areaFilter, user])
 
   function openModal(project: Project, type: ModalType) {
     setActiveProject(project)
@@ -184,7 +222,7 @@ export default function ProjectsPage() {
   return (
     <div className="p-6 mx-auto w-full max-w-[1610px] space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
@@ -192,8 +230,30 @@ export default function ProjectsPage() {
             className="w-full pl-9 pr-4 py-2.5 rounded-lg bg-navy-800 border border-navy-600 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-electric transition-all"
           />
         </div>
+        {isSuperAdmin(user) && (
+          <div className="relative flex w-full items-center gap-2 sm:w-[min(100%,280px)]">
+            <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+              aria-label="Filtrar por área del dueño"
+              className="w-full appearance-none rounded-lg border border-navy-600 bg-navy-800 py-2.5 pl-9 pr-8 text-sm text-white focus:border-electric focus:outline-none"
+            >
+              <option value={AREA_FILTER_ALL}>Todas las áreas</option>
+              <option value={AREA_FILTER_NONE}>Sin área (dueño)</option>
+              {catalogAreas
+                .slice()
+                .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
+                .map((a) => (
+                  <option key={a.id} value={String(a.id)}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
         <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric text-white text-sm font-medium hover:bg-electric-bright shadow-glow-blue transition-all whitespace-nowrap">
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-electric text-white text-sm font-medium hover:bg-electric-bright shadow-glow-blue transition-all whitespace-nowrap shrink-0">
           <Plus className="w-4 h-4" /> Nuevo proyecto
         </button>
       </div>
@@ -220,7 +280,9 @@ export default function ProjectsPage() {
         <div className="flex flex-col items-center justify-center h-48 text-center">
           <FolderKanban className="w-10 h-10 text-navy-700 mb-3" />
           <p className="text-slate-400 text-sm">
-            {search ? "No hay proyectos que coincidan." : "Aún no hay proyectos. ¡Crea el primero!"}
+            {search.trim() || (isSuperAdmin(user) && areaFilter !== AREA_FILTER_ALL)
+              ? "No hay proyectos que coincidan con los filtros."
+              : "Aún no hay proyectos. ¡Crea el primero!"}
           </p>
         </div>
       ) : (
@@ -259,6 +321,18 @@ export default function ProjectsPage() {
                       </span>
                     </div>
                   </div>
+
+                  {isSuperAdmin(user) && (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1.5 -mt-1">
+                      <Building2 className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+                      <span>
+                        Área del dueño:{" "}
+                        <span className="text-slate-400">
+                          {project.owner_work_area_name?.trim() || "Sin área"}
+                        </span>
+                      </span>
+                    </p>
+                  )}
 
                   {(project.okr_objectives ?? project.description) && (
                     <p className="text-slate-400 text-xs leading-relaxed line-clamp-2">

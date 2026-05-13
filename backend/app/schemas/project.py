@@ -46,6 +46,8 @@ class ProjectRead(BaseModel):
     assigned_area_name: str | None = None
     created_at: datetime
     updated_at: datetime
+    owner_work_area_id: int | None = None
+    owner_work_area_name: str | None = None
     evidence_count: int = 0
     viewer_can_modify_tasks: bool = False
     model_config = {"from_attributes": True}

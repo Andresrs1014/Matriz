@@ -17,6 +17,9 @@ export interface Project {
   status: string
   source: string
   owner_id: number
+  /** Área funcional del usuario dueño (catálogo); útil para filtrar vistas operativas */
+  owner_work_area_id?: number | null
+  owner_work_area_name?: string | null
   ms_list_id: string | null
   approved_by: number | null
   approved_at: string | null

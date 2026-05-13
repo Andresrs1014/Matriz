@@ -48,6 +48,29 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 logger = logging.getLogger(__name__)
 
 
+def _owner_area_map(
+    db: Session, owner_ids: list[int]
+) -> dict[int, tuple[int | None, str | None]]:
+    """owner_id -> (work_area_id, work_area_name) según el usuario dueño."""
+    if not owner_ids:
+        return {}
+    unique = list({i for i in owner_ids})
+    users = list(db.exec(select(User).where(User.id.in_(unique))).all())
+    wa_ids = {u.work_area_id for u in users if u.work_area_id}
+    names: dict[int, str] = {}
+    if wa_ids:
+        for wa in db.exec(select(WorkArea).where(WorkArea.id.in_(wa_ids))).all():
+            if wa.id is not None:
+                names[wa.id] = wa.name
+    out: dict[int, tuple[int | None, str | None]] = {}
+    for u in users:
+        if u.id is None:
+            continue
+        wid = u.work_area_id
+        out[u.id] = (wid, names.get(wid) if wid else None)
+    return out
+
+
 def _parse_collaborators(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -66,8 +89,14 @@ def _to_read(
     current_user: User,
     evidence_count: int = 0,
     area_name_by_id: dict[int, str] | None = None,
+    owner_area_by_owner_id: dict[int, tuple[int | None, str | None]] | None = None,
 ) -> ProjectRead:
     assert p.id is not None
+    if owner_area_by_owner_id is None:
+        owner_area_by_owner_id = _owner_area_map(db, [p.owner_id])
+    ow_area_id, ow_area_name = owner_area_by_owner_id.get(
+        p.owner_id, (None, None)
+    )
     assigned_area_name = None
     if p.assigned_area_id:
         if area_name_by_id is not None and p.assigned_area_id in area_name_by_id:
@@ -109,6 +138,8 @@ def _to_read(
         updated_at=p.updated_at,
         evidence_count=evidence_count,
         viewer_can_modify_tasks=task_svc.can_modify_tasks(db, p, current_user),
+        owner_work_area_id=ow_area_id,
+        owner_work_area_name=ow_area_name,
     )
 
 
@@ -146,8 +177,18 @@ def list_projects(
         for row in db.exec(select(WorkArea).where(WorkArea.id.in_(area_ids))).all():
             if row.id is not None:
                 area_name_by_id[row.id] = row.name
+    owner_area_by_owner_id = _owner_area_map(
+        db, list({p.owner_id for p in projects})
+    )
     return [
-        _to_read(db, p, current_user, ev_counts.get(p.id, 0), area_name_by_id)
+        _to_read(
+            db,
+            p,
+            current_user,
+            ev_counts.get(p.id, 0),
+            area_name_by_id,
+            owner_area_by_owner_id,
+        )
         for p in projects
     ]
 
