@@ -1,7 +1,8 @@
+import { useState } from "react"
 import { motion } from "framer-motion"
 import {
   FolderKanban, CheckCircle, Clock, BarChart2,
-  Target, AlertCircle, ThumbsUp, ThumbsDown, CalendarClock,
+  Target, AlertCircle, ThumbsUp, ThumbsDown, CalendarClock, Filter,
 } from "lucide-react"
 import { useDashboard } from "@/hooks/useDashboard"
 import KPICard           from "@/components/dashboard/KPICard"
@@ -10,7 +11,8 @@ import { QUADRANT_CONFIG } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 
 export default function DashboardPage() {
-  const { stats, summary, loading } = useDashboard()
+  const [areaId, setAreaId] = useState<number | undefined>(undefined)
+  const { stats, summary, areas, loading } = useDashboard(areaId)
 
   if (loading || !stats) {
     return (
@@ -26,6 +28,26 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 mx-auto w-full max-w-[1610px] space-y-6 animate-fade-in">
+
+      {/* Filtro por área */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 text-slate-400">
+          <Filter size={14} />
+          <span className="text-xs font-medium uppercase tracking-wider">Área</span>
+        </div>
+        <select
+          value={areaId ?? ""}
+          onChange={(e) => setAreaId(e.target.value ? Number(e.target.value) : undefined)}
+          className="bg-navy-950 border border-navy-600/40 rounded-md px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-electric/50"
+        >
+          <option value="">Todas las áreas</option>
+          {areas.map((area) => (
+            <option key={area.id} value={area.id}>
+              {area.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -11,6 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/stats")
 def dashboard_stats(
+    area_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -18,11 +19,13 @@ def dashboard_stats(
     Estadísticas del dashboard.
     - admin/superadmin → globales (todos los proyectos)
     - user             → personales (solo sus proyectos)
+    - area_id          → filtra por área asignada
     """
     return get_dashboard_stats(
         db,
         user_id=cast(int, current_user.id),
         role=current_user.role,
+        area_id=area_id,
     )
 
 

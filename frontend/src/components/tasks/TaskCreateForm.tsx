@@ -63,7 +63,7 @@ export default function TaskCreateForm({
   return (
     <form
       onSubmit={(e) => void handleSubmit(e)}
-      className="relative overflow-hidden rounded-xl border border-navy-600/40 bg-[rgba(5,15,46,0.55)] backdrop-blur-md shadow-[0_0_0_1px_rgba(59,130,246,0.06)]"
+      className="relative overflow-hidden rounded-xl border border-navy-600/40 bg-[rgba(5,15,46,0.85)] shadow-[0_0_0_1px_rgba(59,130,246,0.06)]"
     >
       <div className="laser-line-h opacity-70" aria-hidden />
       <div className="border-l-2 border-electric/30 pl-4 pr-4 pb-4 pt-3 sm:pl-5 sm:pr-5">

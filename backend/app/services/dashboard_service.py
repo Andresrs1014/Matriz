@@ -4,17 +4,20 @@ from app.models.project import Project
 from app.models.matrix import MatrixEvaluation, QuestionCategory
 
 
-def get_dashboard_stats(db: Session, user_id: int, role: str) -> dict:
+def get_dashboard_stats(db: Session, user_id: int, role: str, area_id: int | None = None) -> dict:
     """
     admin/superadmin → estadísticas globales de todos los proyectos
     user             → estadísticas solo de sus proyectos
+    area_id          → filtra proyectos por área asignada
     """
     is_admin = role in ("admin", "superadmin")
 
-    # Base query según rol
+    # Base query según rol y área
     base = select(Project)
     if not is_admin:
         base = base.where(Project.owner_id == user_id)
+    if area_id is not None:
+        base = base.where(Project.assigned_area_id == area_id)
 
     projects = db.exec(base).all()
     project_ids = [p.id for p in projects]
@@ -72,17 +75,19 @@ def get_dashboard_stats(db: Session, user_id: int, role: str) -> dict:
     }
 
 
-def get_quadrant_summary(db: Session, user_id: int, role: str) -> list[dict]:
+def get_quadrant_summary(db: Session, user_id: int, role: str, area_id: int | None = None) -> list[dict]:
     """
     Retorna conteo y lista de proyectos por cuadrante.
-    Respeta el mismo filtro de rol que get_dashboard_stats.
+    Respeta el mismo filtro de rol y área que get_dashboard_stats.
     """
     is_admin = role in ("admin", "superadmin")
 
-    # Obtener IDs de proyectos según rol
+    # Obtener IDs de proyectos según rol y área
     base = select(Project)
     if not is_admin:
         base = base.where(Project.owner_id == user_id)
+    if area_id is not None:
+        base = base.where(Project.assigned_area_id == area_id)
 
     projects = db.exec(base).all()
     project_ids = [p.id for p in projects]
