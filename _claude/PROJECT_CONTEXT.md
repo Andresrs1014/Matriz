@@ -1,4 +1,4 @@
-# Contexto del Proyecto: Matriz de Priorización
+ # Contexto del Proyecto: Matriz de Priorización
 
 > Archivo para uso exclusivo de Claude Code. No se sube al repositorio (.gitignore).
 > Última actualización: 2026-03-31
