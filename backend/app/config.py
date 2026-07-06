@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Evidencias
     evidence_dir: str = "./data/evidence"
-    max_evidence_mb: int = 10
+    max_evidence_mb: int = 20
     max_evidence_per_project: int = 20
 
     def cors_origins_list(self) -> list[str]:

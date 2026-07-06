@@ -14,7 +14,7 @@ export const EVIDENCE_ALLOWED_EXTS = new Set([
   "txt", "doc", "docx", "rtf", "md",
 ])
 
-export const EVIDENCE_MAX_BYTES = 10 * 1024 * 1024
+export const EVIDENCE_MAX_BYTES = 20 * 1024 * 1024
 
 export function validateFile(file: File): { ok: true } | { ok: false; error: string } {
   const ext = file.name.split(".").pop()?.toLowerCase()

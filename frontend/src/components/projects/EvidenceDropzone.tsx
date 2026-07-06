@@ -2,7 +2,7 @@
 import { useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Upload, X, FileCheck } from "lucide-react"
-import { validateFile, formatBytes } from "@/lib/evidence"
+import { validateFile, formatBytes, EVIDENCE_MAX_BYTES } from "@/lib/evidence"
 
 interface PendingFile {
   file: File
@@ -60,7 +60,7 @@ export default function EvidenceDropzone({ files, onChange }: EvidenceDropzonePr
           Arrastra archivos aquí o haz clic para seleccionar
         </p>
         <p className="mt-1 text-[11px] text-slate-600">
-          Máximo 5 archivos, 10 MB cada uno (Excel, PDF, imágenes, Word, txt)
+          Máximo 5 archivos, {formatBytes(EVIDENCE_MAX_BYTES)} cada uno (Excel, PDF, imágenes, Word, txt)
         </p>
         <input
           ref={inputRef}
